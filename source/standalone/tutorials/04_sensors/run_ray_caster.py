@@ -47,7 +47,7 @@ def define_sensor() -> RayCaster:
     # Create a ray-caster sensor
     ray_caster_cfg = RayCasterCfg(
         prim_path="/World/Origin.*/ball",
-        mesh_prim_paths=["/World/ground"],
+        mesh_prim_paths=["/World/cube"],
         pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=(2.0, 2.0)),
         attach_yaw_only=True,
         debug_vis=not args_cli.headless,
@@ -66,6 +66,15 @@ def design_scene() -> dict:
     # -- Light
     cfg = sim_utils.DistantLightCfg(intensity=2000)
     cfg.func("/World/light", cfg)
+
+    cone_spawn_cfg = sim_utils.MeshCuboidCfg(
+        size=(10.0, 10.0, 0.1),
+        collision_props=sim_utils.CollisionPropertiesCfg(),
+        visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
+    )
+    cone_spawn_cfg.func(
+        "/World/cube", cone_spawn_cfg, translation=(5.0, 5.0, 0.2), orientation=(1.0, 0.0, 0.0, 0.0)
+    )
 
     # Create separate groups called "Origin1", "Origin2", "Origin3"
     # Each group will have a robot in it
@@ -117,11 +126,11 @@ def run_simulator(sim: sim_utils.SimulationContext, scene_entities: dict):
         # Step simulation
         sim.step()
         # Update the ray-caster
-        with Timer(
-            f"Ray-caster update with {4} x {ray_caster.num_rays} rays with max height of"
-            f" {torch.max(ray_caster.data.pos_w).item():.2f}"
-        ):
-            ray_caster.update(dt=sim.get_physics_dt(), force_recompute=True)
+        # with Timer(
+        #     f"Ray-caster update with {4} x {ray_caster.num_rays} rays with max height of"
+        #     f" {torch.max(ray_caster.data.pos_w).item():.2f}"
+        # ):
+        ray_caster.update(dt=sim.get_physics_dt(), force_recompute=True)
         # Update counter
         step_count += 1
 
