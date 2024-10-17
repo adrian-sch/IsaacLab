@@ -74,15 +74,7 @@ def design_scene() -> dict:
         visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
     )
     cone_spawn_cfg.func(
-        "/World/cube", cone_spawn_cfg, translation=(5.0, 5.0, 0.5), orientation=(0, 0.0436194, 0, 0.9990482)
-    )
-    cone2_spawn_cfg = sim_utils.MeshCuboidCfg(
-        size=(10.0, 10.0, 0.1),
-        collision_props=sim_utils.CollisionPropertiesCfg(),
-        visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 0.0, 1.0)),
-    )
-    cone2_spawn_cfg.func(
-        "/World/cube2", cone2_spawn_cfg
+        "/World/cube", cone_spawn_cfg, translation=(5.0, 5.0, 0.2), orientation=(1.0, 0.0, 0.0, 0.0)
     )
 
     # Create separate groups called "Origin1", "Origin2", "Origin3"
@@ -147,15 +139,7 @@ def run_simulator(sim: sim_utils.SimulationContext, scene_entities: dict):
         #     f"Ray-caster update with {4} x {ray_caster.num_rays} rays with max height of"
         #     f" {torch.max(ray_caster.data.pos_w).item():.2f}"
         # ):
-        
-        if step_count % 100 == 0:
-            with Timer("Ray-caster update"):
-                ray_caster.update(dt=sim.get_physics_dt(), force_recompute=True)
-        else:
-            ray_caster.update(dt=sim.get_physics_dt(), force_recompute=True)
-
-        # print(f"Ray-caster: {ray_caster.data}")
-
+        ray_caster.update(dt=sim.get_physics_dt(), force_recompute=True)
         # Update counter
         step_count += 1
 
