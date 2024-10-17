@@ -58,6 +58,13 @@ x-default-isaac-lab-volumes: &default-isaac-lab-volumes
     source: isaac-lab-data
     target: ${DOCKER_ISAACLAB_PATH}/data_storage
 
+  # - type: bind
+  #   source: ../../ws_mobile_manipulation
+  #   target: ${DOCKER_ISAACLAB_PATH}/../ws_mobile_manipulation
+  - type: bind
+    source: .bash/.bash_history
+    target: /root/.bash_history
+
 x-default-isaac-lab-environment: &default-isaac-lab-environment
   - ISAACSIM_PATH=${DOCKER_ISAACLAB_PATH}/_isaac_sim
   - OMNI_KIT_ALLOW_ROOT=1
