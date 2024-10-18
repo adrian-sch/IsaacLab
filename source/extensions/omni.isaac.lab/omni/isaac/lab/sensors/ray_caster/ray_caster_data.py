@@ -27,3 +27,9 @@ class RayCasterData:
     Shape is (N, B, 3), where N is the number of sensors, B is the number of rays
     in the scan pattern per sensor.
     """
+
+    ray_distances: torch.Tensor = None
+    """The ray hit distances.
+
+    Shape is (N, 1), where N is the number of sensors.
+    """

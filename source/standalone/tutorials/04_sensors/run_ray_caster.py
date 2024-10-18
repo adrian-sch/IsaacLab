@@ -48,9 +48,10 @@ def define_sensor() -> RayCaster:
     ray_caster_cfg = RayCasterCfg(
         prim_path="/World/Origin.*/ball",
         mesh_prim_paths=["/World/cube"],
-        pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=(2.0, 2.0)),
+        pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=(1.0, 1.0)),
         attach_yaw_only=True,
         debug_vis=not args_cli.headless,
+        max_distance=10.0
     )
     ray_caster = RayCaster(cfg=ray_caster_cfg)
 
@@ -73,12 +74,20 @@ def design_scene() -> dict:
         visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
     )
     cone_spawn_cfg.func(
-        "/World/cube", cone_spawn_cfg, translation=(5.0, 5.0, 0.2), orientation=(1.0, 0.0, 0.0, 0.0)
+        "/World/cube", cone_spawn_cfg, translation=(5.0, 5.0, 0.5), orientation=(0, 0.0436194, 0, 0.9990482)
+    )
+    cone2_spawn_cfg = sim_utils.MeshCuboidCfg(
+        size=(10.0, 10.0, 0.1),
+        collision_props=sim_utils.CollisionPropertiesCfg(),
+        visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 0.0, 1.0)),
+    )
+    cone2_spawn_cfg.func(
+        "/World/cube2", cone2_spawn_cfg
     )
 
     # Create separate groups called "Origin1", "Origin2", "Origin3"
     # Each group will have a robot in it
-    origins = [[0.25, 0.25, 0.0], [-0.25, 0.25, 0.0], [0.25, -0.25, 0.0], [-0.25, -0.25, 0.0]]
+    origins = [[5.0, 5.0, 5.0]]
     for i, origin in enumerate(origins):
         prim_utils.create_prim(f"/World/Origin{i}", "Xform", translation=origin)
     # -- Balls
@@ -109,14 +118,22 @@ def run_simulator(sim: sim_utils.SimulationContext, scene_entities: dict):
 
     # define an initial position of the sensor
     ball_default_state = balls.data.default_root_state.clone()
-    ball_default_state[:, :3] = torch.rand_like(ball_default_state[:, :3]) * 10
+
+    # ball_default_state[:, :3] = torch.rand_like(ball_default_state[:, :3]) * 10
+    ball_default_state[:, 0] = 0.5
+    ball_default_state[:, 1] = 0.5
+    ball_default_state[:, 2] = 10.0
+
+
+
+    print(f"Initial ball state: {ball_default_state}")
 
     # Create a counter for resetting the scene
     step_count = 0
     # Simulate physics
     while simulation_app.is_running():
         # Reset the scene
-        if step_count % 250 == 0:
+        if step_count % 1000 == 0:
             # reset the balls
             balls.write_root_state_to_sim(ball_default_state)
             # reset the sensor
@@ -130,7 +147,15 @@ def run_simulator(sim: sim_utils.SimulationContext, scene_entities: dict):
         #     f"Ray-caster update with {4} x {ray_caster.num_rays} rays with max height of"
         #     f" {torch.max(ray_caster.data.pos_w).item():.2f}"
         # ):
-        ray_caster.update(dt=sim.get_physics_dt(), force_recompute=True)
+        
+        if step_count % 100 == 0:
+            with Timer("Ray-caster update"):
+                ray_caster.update(dt=sim.get_physics_dt(), force_recompute=True)
+        else:
+            ray_caster.update(dt=sim.get_physics_dt(), force_recompute=True)
+
+        # print(f"Ray-caster: {ray_caster.data}")
+
         # Update counter
         step_count += 1
 

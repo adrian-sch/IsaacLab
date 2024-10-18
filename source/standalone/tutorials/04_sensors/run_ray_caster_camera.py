@@ -105,7 +105,7 @@ def run_simulator(sim: sim_utils.SimulationContext, scene_entities: dict):
     # Set pose: There are two ways to set the pose of the camera.
     # -- Option-1: Set pose using view
     eyes = torch.tensor([[2.5, 2.5, 2.5], [-2.5, -2.5, 2.5]], device=sim.device)
-    targets = torch.tensor([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]], device=sim.device)
+    targets = torch.tensor([[0.0, 0.0, 0.0], [5.0, 0.0, 0.0]], device=sim.device)
     camera.set_world_poses_from_view(eyes, targets)
     # -- Option-2: Set pose using ROS
     # position = torch.tensor([[2.5, 2.5, 2.5]], device=sim.device)
