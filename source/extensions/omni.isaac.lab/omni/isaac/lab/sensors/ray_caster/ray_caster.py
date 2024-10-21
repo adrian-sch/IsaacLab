@@ -15,7 +15,7 @@ import omni.log
 import omni.physics.tensors.impl.api as physx
 import warp as wp
 from omni.isaac.core.prims import XFormPrimView
-from pxr import UsdGeom, UsdPhysics
+from pxr import UsdGeom, UsdPhysics, Usd, Gf
 
 import omni.isaac.lab.sim as sim_utils
 from omni.isaac.lab.markers import VisualizationMarkers
@@ -191,8 +191,19 @@ class RayCaster(SensorBase):
                 mesh_prim = UsdGeom.Mesh(mesh_prim)
                 # read the vertices and faces
                 points = np.asarray(mesh_prim.GetPointsAttr().Get())
+                # Transform mesh into world frame
+                time = Usd.TimeCode.Default()
+                transform : Gf.Matrix4d = mesh_prim.ComputeLocalToWorldTransform(time)
+                transformed_points_list = []
+                for point in points:
+                    transformed_point = transform.Transform(Gf.Vec3d(float(point[0]), float(point[1]), float(point[2])))
+                    transformed_points_list.append((transformed_point[0], transformed_point[1], transformed_point[2]))
+
+                # Convert the list to a NumPy array
+                transformed_points = np.asarray(transformed_points_list)
+
                 indices = np.asarray(mesh_prim.GetFaceVertexIndicesAttr().Get())
-                wp_mesh = convert_to_warp_mesh(points, indices, device=self.device)
+                wp_mesh = convert_to_warp_mesh(transformed_points, indices, device=self.device)
                 # print info
                 omni.log.info(
                     f"Read mesh prim: {mesh_prim.GetPath()} with {len(points)} vertices and {len(indices)} faces."
