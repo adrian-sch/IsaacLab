@@ -162,10 +162,10 @@ class RayCaster(SensorBase):
 
     def _initialize_warp_meshes(self):
         # check number of mesh prims provided
-        if len(self.cfg.mesh_prim_paths) != 1:
-            raise NotImplementedError(
-                f"RayCaster currently only supports one mesh prim. Received: {len(self.cfg.mesh_prim_paths)}"
-            )
+        # if len(self.cfg.mesh_prim_paths) != 1:
+        #     raise NotImplementedError(
+        #         f"RayCaster currently only supports one mesh prim. Received: {len(self.cfg.mesh_prim_paths)}"
+        #     )
 
         # read prims to ray-cast
         for mesh_prim_path in self.cfg.mesh_prim_paths:
@@ -276,18 +276,24 @@ class RayCaster(SensorBase):
             ray_starts_w += pos_w.unsqueeze(1)
             ray_directions_w = quat_apply(quat_w.repeat(1, self.num_rays), self.ray_directions[env_ids])
         # ray cast and store the hits
-        # TODO: Make this work for multiple meshes?
-
-        ray_hits, ray_distances, _, _ = raycast_mesh(
-            ray_starts_w,
-            ray_directions_w,
-            max_dist=self.cfg.max_distance,
-            mesh=RayCaster.meshes[self.cfg.mesh_prim_paths[0]],
-            return_distance=True,
-        )
-
-        if ray_distances is None:
-            ray_distances = torch.zeros_like(self._data.ray_distances[env_ids])
+        ray_hits = torch.zeros(self._view.count, self.num_rays, 3, device=self._device)
+        ray_distances = torch.full((self._view.count, self.num_rays), float('inf'), device=self._device)
+        
+        for mesh_prim_path in self.cfg.mesh_prim_paths:
+            
+            new_ray_hits, new_ray_distances, _, _ = raycast_mesh(
+                ray_starts_w,
+                ray_directions_w,
+                max_dist=self.cfg.max_distance,
+                mesh=RayCaster.meshes[mesh_prim_path],
+                return_distance=True,
+            )
+            
+            # Update ray_distances and ray_hits where the new distances are smaller
+            closer_mask = new_ray_distances < ray_distances
+            ray_distances = torch.where(closer_mask, new_ray_distances, ray_distances)
+            expanded_mask = closer_mask.unsqueeze(-1).expand_as(ray_hits)
+            ray_hits = torch.where(expanded_mask, new_ray_hits, ray_hits)
 
         self._data.ray_hits_w[env_ids] = ray_hits
         self._data.ray_distances[env_ids] = ray_distances

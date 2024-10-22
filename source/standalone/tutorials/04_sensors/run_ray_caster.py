@@ -47,10 +47,10 @@ def define_sensor() -> RayCaster:
     # Create a ray-caster sensor
     ray_caster_cfg = RayCasterCfg(
         prim_path="/World/Origin.*/ball",
-        mesh_prim_paths=["/World/cube"],
+        mesh_prim_paths=["/World/cube", "/World/ground", "/World/cube2"],
         pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=(1.0, 1.0)),
         attach_yaw_only=True,
-        debug_vis=not args_cli.headless,
+        debug_vis=True,
         max_distance=10.0
     )
     ray_caster = RayCaster(cfg=ray_caster_cfg)
@@ -120,8 +120,8 @@ def run_simulator(sim: sim_utils.SimulationContext, scene_entities: dict):
     ball_default_state = balls.data.default_root_state.clone()
 
     # ball_default_state[:, :3] = torch.rand_like(ball_default_state[:, :3]) * 10
-    ball_default_state[:, 0] = 0.5
-    ball_default_state[:, 1] = 0.5
+    ball_default_state[:, 0] = 0.1
+    ball_default_state[:, 1] = 0.1
     ball_default_state[:, 2] = 10.0
 
 
