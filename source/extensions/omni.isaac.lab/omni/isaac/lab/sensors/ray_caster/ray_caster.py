@@ -112,11 +112,8 @@ class RayCaster(SensorBase):
         # resample the drift
         self.drift[env_ids].uniform_(*self.cfg.drift_range)
 
-        print("Resetting ray-caster sensor.")
-
-        from omni.isaac.lab.utils.timer import Timer
-        with Timer("init wrap"):
-            self._initialize_warp_meshes()
+        # reinit meshes to update positons
+        self._initialize_warp_meshes()
 
     """
     Implementation.
