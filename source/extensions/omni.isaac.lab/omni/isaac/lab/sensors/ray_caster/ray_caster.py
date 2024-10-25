@@ -16,6 +16,7 @@ import omni.physics.tensors.impl.api as physx
 import warp as wp
 from omni.isaac.core.prims import XFormPrimView
 from pxr import UsdGeom, UsdPhysics, Usd, Gf
+from pxr import UsdGeom, UsdPhysics, Usd, Gf
 
 import omni.isaac.lab.sim as sim_utils
 from omni.isaac.lab.markers import VisualizationMarkers
@@ -115,6 +116,9 @@ class RayCaster(SensorBase):
         # reinit meshes to update positons
         self._initialize_warp_meshes()
 
+        # reinit meshes to update positons
+        self._initialize_warp_meshes()
+
     """
     Implementation.
     """
@@ -163,6 +167,8 @@ class RayCaster(SensorBase):
             # check if mesh already casted into warp mesh
             # if mesh_prim_path in RayCaster.meshes:
             #     continue
+            # if mesh_prim_path in RayCaster.meshes:
+            #     continue
 
             # check if the prim is a plane - handle PhysX plane as a special case
             # if a plane exists then we need to create an infinite mesh that is a plane
@@ -193,7 +199,19 @@ class RayCaster(SensorBase):
                 # Convert the list to a NumPy array
                 transformed_points = np.asarray(transformed_points_list)
 
+                # Transform mesh into world frame
+                time = Usd.TimeCode.Default()
+                transform : Gf.Matrix4d = mesh_prim.ComputeLocalToWorldTransform(time)
+                transformed_points_list = []
+                for point in points:
+                    transformed_point = transform.Transform(Gf.Vec3d(float(point[0]), float(point[1]), float(point[2])))
+                    transformed_points_list.append((transformed_point[0], transformed_point[1], transformed_point[2]))
+
+                # Convert the list to a NumPy array
+                transformed_points = np.asarray(transformed_points_list)
+
                 indices = np.asarray(mesh_prim.GetFaceVertexIndicesAttr().Get())
+                wp_mesh = convert_to_warp_mesh(transformed_points, indices, device=self.device)
                 wp_mesh = convert_to_warp_mesh(transformed_points, indices, device=self.device)
                 # print info
                 omni.log.info(
@@ -231,6 +249,7 @@ class RayCaster(SensorBase):
         self._data.pos_w = torch.zeros(self._view.count, 3, device=self._device)
         self._data.quat_w = torch.zeros(self._view.count, 4, device=self._device)
         self._data.ray_hits_w = torch.zeros(self._view.count, self.num_rays, 3, device=self._device)
+        self._data.ray_distances = torch.zeros(self._view.count, self.num_rays, device=self._device)
         self._data.ray_distances = torch.zeros(self._view.count, self.num_rays, device=self._device)
 
     def _update_buffers_impl(self, env_ids: Sequence[int]):
@@ -288,8 +307,6 @@ class RayCaster(SensorBase):
 
         self._data.ray_hits_w[env_ids] = ray_hits
         self._data.ray_distances[env_ids] = ray_distances
-            mesh=self.meshes[self.cfg.mesh_prim_paths[0]],
-        )[0]
 
     def _set_debug_vis_impl(self, debug_vis: bool):
         # set visibility of markers
