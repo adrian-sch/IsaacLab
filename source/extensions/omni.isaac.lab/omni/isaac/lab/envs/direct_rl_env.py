@@ -33,6 +33,9 @@ from .direct_rl_env_cfg import DirectRLEnvCfg
 from .ui import ViewportCameraController
 from .utils.spaces import sample_space, spec_to_gym_space
 
+# TODO debug
+from omni.isaac.lab.utils.timer import Timer
+
 
 class DirectRLEnv(gym.Env):
     """The superclass for the direct workflow to design environments.
@@ -310,7 +313,8 @@ class DirectRLEnv(gym.Env):
             action = self._action_noise_model.apply(action)
 
         # process actions
-        self._pre_physics_step(action)
+        with Timer("[INFO]: Time taken for _pre_physics_step"):
+            self._pre_physics_step(action)
 
         # check if we need to do rendering within the physics loop
         # note: checked here once to avoid multiple checks within the loop
@@ -324,12 +328,14 @@ class DirectRLEnv(gym.Env):
             # set actions into simulator
             self.scene.write_data_to_sim()
             # simulate
-            self.sim.step(render=False)
+            with Timer("[INFO]: Time taken for step sim"):
+                self.sim.step(render=False)
             # render between steps only if the GUI or an RTX sensor needs it
             # note: we assume the render interval to be the shortest accepted rendering interval.
             #    If a camera needs rendering at a faster frequency, this will lead to unexpected behavior.
             if self._sim_step_counter % self.cfg.sim.render_interval == 0 and is_rendering:
-                self.sim.render()
+                with Timer("[INFO]: Time taken for render"):
+                    self.sim.render()
             # update buffers at sim dt
             self.scene.update(dt=self.physics_dt)
 
@@ -340,12 +346,15 @@ class DirectRLEnv(gym.Env):
 
         self.reset_terminated[:], self.reset_time_outs[:] = self._get_dones()
         self.reset_buf = self.reset_terminated | self.reset_time_outs
-        self.reward_buf = self._get_rewards()
+
+        with Timer("[INFO]: Time taken for _get_rewards"):
+            self.reward_buf = self._get_rewards()
 
         # -- reset envs that terminated/timed-out and log the episode information
         reset_env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
         if len(reset_env_ids) > 0:
-            self._reset_idx(reset_env_ids)
+            with Timer("[INFO]: Time taken for _reset_idx"):
+                self._reset_idx(reset_env_ids)
             # if sensors are added to the scene, make sure we render to reflect changes in reset
             if self.sim.has_rtx_sensors() and self.cfg.rerender_on_reset:
                 self.sim.render()
@@ -356,7 +365,8 @@ class DirectRLEnv(gym.Env):
                 self.event_manager.apply(mode="interval", dt=self.step_dt)
 
         # update observations
-        self.obs_buf = self._get_observations()
+        with Timer("[INFO]: Time taken for _get_observations"):
+            self.obs_buf = self._get_observations()
 
         # add observation noise
         # note: we apply no noise to the state space (since it is used for critic networks)

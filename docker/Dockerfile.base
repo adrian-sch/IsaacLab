@@ -84,32 +84,15 @@ RUN touch /bin/nvidia-smi && \
 RUN --mount=type=cache,target=${DOCKER_USER_HOME}/.cache/pip \
     ${ISAACLAB_PATH}/isaaclab.sh --install
 
-USER root
-# Add User 
-ARG USERNAME=admin-jfinke
-ARG USER_UID=1001
-ARG USER_GID=1001
-
-# add local user
-RUN groupadd -g $USER_GID $USERNAME && \
-    useradd -u $USER_UID -g $USER_GID $USERNAME -m -s /bin/bash && \
-    echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
-    echo "root:root" | chpasswd
-
-# adjust aliasing isaaclab.sh and python for convenience, delete the other aliasing block instead of this one
-RUN echo "export ISAACLAB_PATH=${ISAACLAB_PATH}" >> /home/$USERNAME/.bashrc && \
-    echo "alias isaaclab=${ISAACLAB_PATH}/isaaclab.sh" >> /home/$USERNAME/.bashrc && \
-    echo "alias python=${ISAACLAB_PATH}/_isaac_sim/python.sh" >> /home/$USERNAME/.bashrc && \
-    echo "alias python3=${ISAACLAB_PATH}/_isaac_sim/python.sh" >> /home/$USERNAME/.bashrc && \
-    echo "alias pip='${ISAACLAB_PATH}/_isaac_sim/python.sh -m pip'" >> /home/$USERNAME/.bashrc && \
-    echo "alias pip3='${ISAACLAB_PATH}/_isaac_sim/python.sh -m pip'" >> /home/$USERNAME/.bashrc && \
-    echo "alias tensorboard='${ISAACLAB_PATH}/_isaac_sim/python.sh ${ISAACLAB_PATH}/_isaac_sim/tensorboard'" >> /home/$USERNAME/.bashrc && \
-    echo "export TZ=$(date +%Z)" >> /home/$USERNAME/.bashrc && \
-    echo "export PROMPT_COMMAND='history -a'" >> /home/$USERNAME/.bashrc && \
-    chown -R $USERNAME:$USERNAME /workspace && \
-    chown -R $USERNAME:$USERNAME /isaac-sim
-
-USER admin-jfinke
+# aliasing isaaclab.sh and python for convenience
+RUN echo "export ISAACLAB_PATH=${ISAACLAB_PATH}" >> ${HOME}/.bashrc && \
+    echo "alias isaaclab=${ISAACLAB_PATH}/isaaclab.sh" >> ${HOME}/.bashrc && \
+    echo "alias python=${ISAACLAB_PATH}/_isaac_sim/python.sh" >> ${HOME}/.bashrc && \
+    echo "alias python3=${ISAACLAB_PATH}/_isaac_sim/python.sh" >> ${HOME}/.bashrc && \
+    echo "alias pip='${ISAACLAB_PATH}/_isaac_sim/python.sh -m pip'" >> ${HOME}/.bashrc && \
+    echo "alias pip3='${ISAACLAB_PATH}/_isaac_sim/python.sh -m pip'" >> ${HOME}/.bashrc && \
+    echo "alias tensorboard='${ISAACLAB_PATH}/_isaac_sim/python.sh ${ISAACLAB_PATH}/_isaac_sim/tensorboard'" >> ${HOME}/.bashrc && \
+    echo "export TZ=$(date +%Z)" >> ${HOME}/.bashrc
 
 # make working directory as the Isaac Lab directory
 # this is the default directory when the container is run

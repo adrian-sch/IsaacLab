@@ -70,6 +70,10 @@ class RayCaster(SensorBase):
         super().__init__(cfg)
         # Create empty variables for storing output data
         self._data = RayCasterData()
+        # create empty dictionary to store meshes and views
+        self._views: dict[str, physx.ArticulationView | physx.RigidBodyView] = {}
+        self._origin_points: dict[str, np.array] = {}
+        self._origin_indices: dict[str, np.array] = {}
         # the warp meshes used for raycasting.
         self.meshes: dict[str, wp.Mesh] = {}
 
@@ -107,17 +111,15 @@ class RayCaster(SensorBase):
     def reset(self, env_ids: Sequence[int] | None = None):
         # reset the timers and counters
         super().reset(env_ids)
+
+        # reinit meshes to update positons
+        self._update_warp_meshes(env_ids)
+
         # resolve None
         if env_ids is None:
             env_ids = slice(None)
         # resample the drift
         self.drift[env_ids].uniform_(*self.cfg.drift_range)
-
-        # reinit meshes to update positons
-        self._initialize_warp_meshes()
-
-        # reinit meshes to update positons
-        self._initialize_warp_meshes()
 
     """
     Implementation.
@@ -156,19 +158,60 @@ class RayCaster(SensorBase):
         self._initialize_rays_impl()
 
     def _initialize_warp_meshes(self):
-        # check number of mesh prims provided
-        # if len(self.cfg.mesh_prim_paths) != 1:
-        #     raise NotImplementedError(
-        #         f"RayCaster currently only supports one mesh prim. Received: {len(self.cfg.mesh_prim_paths)}"
-        #     )
 
         # read prims to ray-cast
         for mesh_prim_path in self.cfg.mesh_prim_paths:
             # check if mesh already casted into warp mesh
-            # if mesh_prim_path in RayCaster.meshes:
-            #     continue
-            # if mesh_prim_path in RayCaster.meshes:
-            #     continue
+            if mesh_prim_path in self.meshes:
+                continue
+
+            # TODO make this nicer, remove duplicate code
+            # check if mesh is view
+            if '*' in mesh_prim_path:
+                prim = sim_utils.find_first_matching_prim(self.cfg.prim_path)
+                if prim.HasAPI(UsdPhysics.RigidBodyAPI):
+                    mesh_view = self._physics_sim_view.create_rigid_body_view(mesh_prim_path.replace(".*", "*"))
+
+                if mesh_view is None:
+                    raise RuntimeError(f"Failed to find a valid prim view class for the prim paths: {mesh_prim_path}")
+                
+                self._views[mesh_prim_path] = mesh_view
+
+                transformations_w = mesh_view.get_transforms()
+
+                for env, prim_path in enumerate(mesh_view.prim_paths):
+                    # check if mesh already casted into warp mesh
+                    if mesh_prim_path in self.meshes:
+                        continue
+
+                    mesh_prim = sim_utils.get_first_matching_child_prim(
+                    prim_path, lambda prim: prim.GetTypeName() == "Mesh"
+                    )
+                    # check if valid
+                    if mesh_prim is None or not mesh_prim.IsValid():
+                        raise RuntimeError(f"Invalid mesh prim path: {prim_path}")
+                    # cast into UsdGeomMesh
+                    mesh_prim = UsdGeom.Mesh(mesh_prim)
+                    # read the vertices and faces
+                    points = np.asarray(mesh_prim.GetPointsAttr().Get())
+                    # Transform mesh into world frame
+
+                    pos = Gf.Vec3d(transformations_w[env][0].item(), transformations_w[env][1].item(), transformations_w[env][2].item())
+                    rotation = Gf.Rotation(Gf.Quatf(transformations_w[env][3].item(), transformations_w[env][4].item(), transformations_w[env][5].item(), transformations_w[env][6].item()))
+                    transform: Gf.Matrix4d = Gf.Matrix4d(rotation, pos)
+                    transformed_points_list = []
+                    for point in points:
+                        transformed_point = transform.Transform(Gf.Vec3d(float(point[0]), float(point[1]), float(point[2])))
+                        transformed_points_list.append((transformed_point[0], transformed_point[1], transformed_point[2]))
+
+                    # Convert the list to a NumPy array
+                    transformed_points = np.asarray(transformed_points_list)
+
+                    indices = np.asarray(mesh_prim.GetFaceVertexIndicesAttr().Get())
+                    wp_mesh = convert_to_warp_mesh(transformed_points, indices, device=self.device)
+                    self.meshes[prim_path] = wp_mesh
+                continue
+
 
             # check if the prim is a plane - handle PhysX plane as a special case
             # if a plane exists then we need to create an infinite mesh that is a plane
@@ -199,19 +242,7 @@ class RayCaster(SensorBase):
                 # Convert the list to a NumPy array
                 transformed_points = np.asarray(transformed_points_list)
 
-                # Transform mesh into world frame
-                time = Usd.TimeCode.Default()
-                transform : Gf.Matrix4d = mesh_prim.ComputeLocalToWorldTransform(time)
-                transformed_points_list = []
-                for point in points:
-                    transformed_point = transform.Transform(Gf.Vec3d(float(point[0]), float(point[1]), float(point[2])))
-                    transformed_points_list.append((transformed_point[0], transformed_point[1], transformed_point[2]))
-
-                # Convert the list to a NumPy array
-                transformed_points = np.asarray(transformed_points_list)
-
                 indices = np.asarray(mesh_prim.GetFaceVertexIndicesAttr().Get())
-                wp_mesh = convert_to_warp_mesh(transformed_points, indices, device=self.device)
                 wp_mesh = convert_to_warp_mesh(transformed_points, indices, device=self.device)
                 # print info
                 omni.log.info(
@@ -230,6 +261,25 @@ class RayCaster(SensorBase):
             raise RuntimeError(
                 f"No meshes found for ray-casting! Please check the mesh prim paths: {self.cfg.mesh_prim_paths}"
             )
+        
+    def _update_warp_meshes(self, env_ids: Sequence[int] | None = None):
+
+        # for update:
+        # 1. get ransformation
+        # 2. use saved original points
+        # 3. transform points with new transformation
+        # 4. convert to warp meshes
+        # 5. update the warp meshes
+
+        # save prims, views, points, indices
+
+        if env_ids is not None:
+            pass # TODO implement
+            #update the env meshes
+
+        # update all others
+        
+        pass # TODO implement
 
     def _initialize_rays_impl(self):
         # compute ray stars and directions
@@ -289,13 +339,14 @@ class RayCaster(SensorBase):
         ray_hits = torch.zeros(self._view.count, self.num_rays, 3, device=self._device)
         ray_distances = torch.full((self._view.count, self.num_rays), float('inf'), device=self._device)
         
-        for mesh_prim_path in self.cfg.mesh_prim_paths:
-            
+        # for mesh in self.meshes:
+        for mesh in self.meshes:
+
             new_ray_hits, new_ray_distances, _, _ = raycast_mesh(
                 ray_starts_w,
                 ray_directions_w,
                 max_dist=self.cfg.max_distance,
-                mesh=RayCaster.meshes[mesh_prim_path],
+                mesh=self.meshes[mesh],
                 return_distance=True,
             )
             

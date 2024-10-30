@@ -48,7 +48,7 @@ def define_sensor() -> RayCaster:
     ray_caster_cfg = RayCasterCfg(
         prim_path="/World/Origin.*/ball",
         mesh_prim_paths=["/World/cube", "/World/ground", "/World/cube2"],
-        pattern_cfg=patterns.LidarPatternCfg(channels=1, vertical_fov_range=(0.0, 0.0), horizontal_fov_range=(-180.0, 180.0), horizontal_res=0.12),
+        pattern_cfg=patterns.LidarPatternCfg(channels=16, vertical_fov_range=(-10.0, 10.0), horizontal_fov_range=(-180.0, 180.0), horizontal_res=1.2),
         attach_yaw_only=True,
         debug_vis=True,
         max_distance=10.0

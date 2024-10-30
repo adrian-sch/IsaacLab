@@ -64,6 +64,9 @@ x-default-isaac-lab-volumes: &default-isaac-lab-volumes
   - type: bind
     source: .bash/.bash_history
     target: /root/.bash_history
+  - type: bind
+    source: ../../isaac_models
+    target: ${DOCKER_ISAACLAB_PATH}/../isaac_models
 
 x-default-isaac-lab-environment: &default-isaac-lab-environment
   - ISAACSIM_PATH=${DOCKER_ISAACLAB_PATH}/_isaac_sim
