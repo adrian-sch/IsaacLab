@@ -347,6 +347,17 @@ class RayCaster(SensorBase):
                 # Convert the list to a NumPy array
                 transformed_points = np.asarray(transformed_points_list)
 
+                # Transform mesh into world frame
+                time = Usd.TimeCode.Default()
+                transform : Gf.Matrix4d = mesh_prim.ComputeLocalToWorldTransform(time)
+                transformed_points_list = []
+                for point in points:
+                    transformed_point = transform.Transform(Gf.Vec3d(float(point[0]), float(point[1]), float(point[2])))
+                    transformed_points_list.append((transformed_point[0], transformed_point[1], transformed_point[2]))
+
+                # Convert the list to a NumPy array
+                transformed_points = np.asarray(transformed_points_list)
+
                 indices = np.asarray(mesh_prim.GetFaceVertexIndicesAttr().Get())
                 wp_mesh = convert_to_warp_mesh(transformed_points, indices, device=self.device)
 

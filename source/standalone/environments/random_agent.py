@@ -35,6 +35,9 @@ import torch
 import omni.isaac.lab_tasks  # noqa: F401
 from omni.isaac.lab_tasks.utils import parse_env_cfg
 
+# TODO debug
+from omni.isaac.lab.utils.timer import Timer
+
 
 def main():
     """Random actions agent with Isaac Lab environment."""
@@ -57,7 +60,8 @@ def main():
             # sample actions from -1 to 1
             actions = 2 * torch.rand(env.action_space.shape, device=env.unwrapped.device) - 1
             # apply actions
-            env.step(actions)
+            with Timer("[INFO]: Time taken for env.step"):
+                env.step(actions)
 
     # close the simulator
     env.close()
