@@ -71,7 +71,7 @@ class RayCaster(SensorBase):
         # Create empty variables for storing output data
         self._data = RayCasterData()
         # create empty dictionary to store meshes and views
-        self._views: dict[str, physx.ArticulationView | physx.RigidBodyView] = {}
+        self._views: dict[str, physx.RigidBodyView] = {}
         self._origin_points: dict[str, np.array] = {}
         self._origin_indices: dict[str, np.array] = {}
         # the warp meshes used for raycasting.
@@ -112,8 +112,12 @@ class RayCaster(SensorBase):
         # reset the timers and counters
         super().reset(env_ids)
 
-        # reinit meshes to update positons
-        self._update_warp_meshes(env_ids)
+
+        # TODO debug
+        from omni.isaac.lab.utils.timer import Timer
+        with Timer("update meshes: "):
+            # reinit meshes to update positons
+            self._update_warp_meshes(env_ids)
 
         # resolve None
         if env_ids is None:
@@ -171,11 +175,10 @@ class RayCaster(SensorBase):
                 prim = sim_utils.find_first_matching_prim(self.cfg.prim_path)
                 if prim.HasAPI(UsdPhysics.RigidBodyAPI):
                     mesh_view = self._physics_sim_view.create_rigid_body_view(mesh_prim_path.replace(".*", "*"))
+                    self._views[mesh_prim_path] = mesh_view
 
                 if mesh_view is None:
                     raise RuntimeError(f"Failed to find a valid prim view class for the prim paths: {mesh_prim_path}")
-                
-                self._views[mesh_prim_path] = mesh_view
 
                 transformations_w = mesh_view.get_transforms()
 
@@ -209,6 +212,9 @@ class RayCaster(SensorBase):
 
                     indices = np.asarray(mesh_prim.GetFaceVertexIndicesAttr().Get())
                     wp_mesh = convert_to_warp_mesh(transformed_points, indices, device=self.device)
+
+                    self._origin_points[prim_path] = points
+                    self._origin_indices[prim_path] = indices
                     self.meshes[prim_path] = wp_mesh
                 continue
 
@@ -244,6 +250,9 @@ class RayCaster(SensorBase):
 
                 indices = np.asarray(mesh_prim.GetFaceVertexIndicesAttr().Get())
                 wp_mesh = convert_to_warp_mesh(transformed_points, indices, device=self.device)
+
+                self._origin_points[mesh_prim_path] = points
+                self._origin_indices[mesh_prim_path] = indices
                 # print info
                 omni.log.info(
                     f"Read mesh prim: {mesh_prim.GetPath()} with {len(points)} vertices and {len(indices)} faces."
@@ -263,23 +272,31 @@ class RayCaster(SensorBase):
             )
         
     def _update_warp_meshes(self, env_ids: Sequence[int] | None = None):
-
-        # for update:
-        # 1. get ransformation
-        # 2. use saved original points
-        # 3. transform points with new transformation
-        # 4. convert to warp meshes
-        # 5. update the warp meshes
-
-        # save prims, views, points, indices
-
+        # TODO update all non view meshes 
         if env_ids is not None:
-            pass # TODO implement
-            #update the env meshes
+            for env_id in env_ids:
+                 for view in self._views:
 
-        # update all others
-        
-        pass # TODO implement
+                    transformations_w = self._views[view].get_transforms()
+                    prim_path = self._views[view].prim_paths[env_id]
+                                         
+                    # read the vertices and faces
+                    points = self._origin_points[prim_path]
+                    indices = self._origin_indices[prim_path]
+                    # Transform mesh into world frame
+
+                    pos = Gf.Vec3d(transformations_w[env_id][0].item(), transformations_w[env_id][1].item(), transformations_w[env_id][2].item())
+                    rotation = Gf.Rotation(Gf.Quatf(transformations_w[env_id][3].item(), transformations_w[env_id][4].item(), transformations_w[env_id][5].item(), transformations_w[env_id][6].item()))
+                    transform: Gf.Matrix4d = Gf.Matrix4d(rotation, pos)
+                    transformed_points_list = []
+                    for point in points:
+                        transformed_point = transform.Transform(Gf.Vec3d(float(point[0]), float(point[1]), float(point[2])))
+                        transformed_points_list.append((transformed_point[0], transformed_point[1], transformed_point[2]))
+
+                    # Convert the list to a NumPy array
+                    transformed_points = np.asarray(transformed_points_list)
+                    wp_mesh = convert_to_warp_mesh(transformed_points, indices, device=self.device)
+                    self.meshes[prim_path] = wp_mesh
 
     def _initialize_rays_impl(self):
         # compute ray stars and directions
