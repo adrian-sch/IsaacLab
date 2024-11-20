@@ -12,7 +12,7 @@ params:
     name: continuous_a2c_logstd
 
   network:
-    name: actor_critic
+    name: testnet
     separate: False
     space:
       continuous:
@@ -59,8 +59,8 @@ params:
     lr_schedule: adaptive
     schedule_type: legacy
     kl_threshold: 0.01
-    score_to_win: 20000
-    max_epochs: 1500
+    score_to_win: 200000
+    max_epochs: 500
     save_best_after: 100
     save_frequency: 50
     grad_norm: 1.0

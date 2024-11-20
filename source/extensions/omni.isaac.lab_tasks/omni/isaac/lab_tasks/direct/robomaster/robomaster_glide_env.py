@@ -30,7 +30,7 @@ from omni.isaac.lab.utils.assets import ISAAC_NUCLEUS_DIR
 # TODO add Roboamster config        
 # model_dir_path = "/home/admin-jfinke/Projects"
 model_dir_path = os.path.abspath("../isaac_models")
-robomaster_usd_path = model_dir_path + "/robomaster_model/usd_files/robomaster_usd_texturesV2/Robomaster_visuals_v2_modified.usd"
+robomaster_usd_path = model_dir_path + "/robomaster_model/usd_files/robomaster_usd_texturesV2/Robomaster_visuals_v2_glide.usd"
 # robomaster_usd_path = model_dir_path + "/robomaster_model/usd_files/robomaster_usd_texturesV2/Robomaster_visuals_v2_simplified_highres_viz.usd"
 arena_usd_path = model_dir_path + "/Isaac_RL_Stage_Blender/rl_stage.usd"
 
@@ -143,7 +143,7 @@ def sample_yaw(size, device = None):
     return quat
 
 @configclass
-class RobomasterEnvCfg(DirectRLEnvCfg):
+class RobomasterGlideEnvCfg(DirectRLEnvCfg):
     # env
     episode_length_s = 20.0
     decimation = 30 # 10 Hz
@@ -160,13 +160,6 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
     env_spacing = 10.0
 
     fin_dist = 0.25
-
-    # kinematics from https://research.ijcaonline.org/volume113/number3/pxc3901586.pdf
-    wheel_radius = 0.05  # radius of the wheel
-    wheel_lx = 0.1  # distance between wheels and the base in x
-    wheel_ly = 0.1  # distance between wheels and the base in y
-    dist = wheel_lx + wheel_ly
-
 
     # simulation
     sim: SimulationCfg = SimulationCfg(
@@ -200,6 +193,8 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
 
     # robot
     robot: ArticulationCfg = ROBOMASTER_CFG.replace(prim_path="/World/envs/env_.*/Robot")
+    thrust_to_weight = 0.6
+    moment_scale = 0.01
 
     # -- Goals
     goal_marker_cfg = VisualizationMarkersCfg(
@@ -217,7 +212,7 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
     arena: RigidObjectCfg = ARENA_CFG.replace(prim_path="/World/envs/env_.*/Arena")
 
     # objects
-    num_objects = 10
+    num_objects = 0
     objects_cfgs = []
     object_prim_paths = []
     # Rigid Object
@@ -251,8 +246,8 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
     # flat_orientation_reward_scale = -5.0
 
 
-class RobomasterEnv(DirectRLEnv):
-    cfg: RobomasterEnvCfg
+class RobomasterGlideEnv(DirectRLEnv):
+    cfg: RobomasterGlideEnvCfg
 
     def __init__(self, cfg: RobomasterEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
@@ -260,19 +255,15 @@ class RobomasterEnv(DirectRLEnv):
         # Joint position command (deviation from default joint positions)
         self._actions = torch.zeros(self.num_envs, self.cfg.action_space, device=self.device)
         self._previous_actions = torch.zeros(self.num_envs, self.cfg.action_space, device=self.device)
+        self._thrust = torch.zeros(self.num_envs, 1, 3, device=self.device)
+        self._moment = torch.zeros(self.num_envs, 1, 3, device=self.device)
+        
+        self._body_id = self._robot.find_bodies("base_link")[0]
+        self._robot_mass = self._robot.root_physx_view.get_masses()[0].sum()
+        self._gravity_magnitude = torch.tensor(self.sim.cfg.gravity, device=self.device).norm()
+        self._robot_weight = (self._robot_mass * self._gravity_magnitude).item()
 
-        # Kinematic model from https://research.ijcaonline.org/volume113/number3/pxc3901586.pdf
-        self.kinematic = 1 / self.cfg.wheel_radius * torch.tensor([
-            [1.0, 1.0, -self.cfg.dist],     # left front
-            [1.0, -1.0, -self.cfg.dist],    # right front
-            [1.0, -1.0, self.cfg.dist],     # left back
-            [1.0, 1.0, self.cfg.dist],      # right back
-            ],
-            device=self.device)
         self._dist_to_goal_buf = torch.zeros(self.num_envs, device=self.device)
-
-        # Get specific body indices
-        self._joint_ids, _ = self._robot.find_joints(["base_lf", "base_rf", "base_lb", "base_rb"])
 
         # randomize goals
         self.goal_pos = torch.zeros(self.num_envs, 3, device=self.device)
@@ -335,15 +326,11 @@ class RobomasterEnv(DirectRLEnv):
         self._cur_step += 1
         self._actions = actions.clone()
 
-        actions[:, 0] = torch.where(actions[:, 0] > 0, actions[:, 0] * self.cfg.action_scale_x_pos , actions[:, 0] * self.cfg.action_scale_x_neg)
-        actions[:, 1] = actions[:, 1] * self.cfg.action_scale_y
-        actions[:, 2] = actions[:, 2] * self.cfg.action_scale_ang
+        self._thrust[:, 0, :2] = self.cfg.thrust_to_weight * self._robot_weight * self._actions[:, :2]
+        self._moment[:, 0, 2] = self.cfg.moment_scale * self._actions[:, 2]
 
-        actions = actions.unsqueeze(2)
-        self._processed_actions = torch.matmul(self.kinematic, actions).squeeze()
-
-    def _apply_action(self):
-        self._robot.set_joint_velocity_target(self._processed_actions, joint_ids = self._joint_ids)
+    def _apply_action(self):     
+        self._robot.set_external_force_and_torque(self._thrust, self._moment, body_ids=self._body_id)
 
     def _get_observations(self) -> dict:
         quad = self._robot.data.root_quat_w
