@@ -108,7 +108,7 @@ CUBE_CFG = RigidObjectCfg(
         spawn=sim_utils.MeshCuboidCfg(
             size=(0.5, 0.3, 0.2),
             collision_props=sim_utils.CollisionPropertiesCfg(),
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0)),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.66, 0.66, 0.66)),
             rigid_props=sim_utils.RigidBodyPropertiesCfg(
                 kinematic_enabled=True,
             ),
@@ -138,8 +138,8 @@ def sample_yaw(size, device = None):
 
     quat = torch.zeros(size=(size, 4), device=device)
     yaw = torch.rand(size) * 2 * math.pi
-    quat[:, 1] = torch.cos(yaw / 2)
-    quat[:, 2] = torch.sin(yaw / 2)
+    quat[:, 0] = torch.cos(yaw / 2)
+    quat[:, 3] = torch.sin(yaw / 2)
     return quat
 
 @configclass
@@ -232,9 +232,9 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
         mesh_prim_paths=["/World/ground"] + object_prim_paths,
         pattern_cfg=patterns.LidarPatternCfg(channels=1, vertical_fov_range=(0.0, 0.0), horizontal_fov_range=(-135.0, 135.0), horizontal_res=0.12),
         offset=OffsetCfg(pos=(0.1, 0.0, 0.083)),
-        attach_yaw_only=False,
-        debug_vis=False,
-        max_distance=10.0
+        attach_yaw_only=True,
+        debug_vis=True,
+        max_distance=5.0
     )
 
     # TODO reward sclaes
@@ -317,8 +317,8 @@ class RobomasterEnv(DirectRLEnv):
 
         self._goal_viz = VisualizationMarkers(self.cfg.goal_marker_cfg)
 
-        # self._lidar_scanner = RayCaster(self.cfg.lidar_scanner_cfg)
-        # self.scene.sensors["lidar_scanner"] = self._lidar_scanner
+        self._lidar_scanner = RayCaster(self.cfg.lidar_scanner_cfg)
+        self.scene.sensors["lidar_scanner"] = self._lidar_scanner
 
         self.cfg.terrain.num_envs = self.scene.cfg.num_envs
         self.cfg.terrain.env_spacing = self.scene.cfg.env_spacing
@@ -453,7 +453,7 @@ class RobomasterEnv(DirectRLEnv):
         # randomize goals
         goal_pos = torch.zeros(num_resets, 3, device=self.device)
 
-        goal_pos = sample_circle((self.cfg.env_spacing * 0.75) / 2, 1.0, size=goal_pos.size(), z=0.1, device=self.device)
+        goal_pos = sample_circle(((self.cfg.env_spacing * 0.75) / 2) - 1.5 , 1.0, size=goal_pos.size(), z=0.1, device=self.device)
         # goal_pos[:, :2].uniform_(-(self.cfg.env_spacing - (2*self.cfg.fin_dist)) / 2, (self.cfg.env_spacing - (2*self.cfg.fin_dist)) / 2)
         goal_pos += env_positions
         # goal_pos[:, 2] = 0.1 # set goal on ground
@@ -463,7 +463,7 @@ class RobomasterEnv(DirectRLEnv):
 
         for object in self._objects:
             object_pose = torch.zeros(num_resets, 7, device=self.device)
-            object_pose[:, :3] = sample_circle((self.cfg.env_spacing * 0.75) / 2, 1.0, size=object_pose[:, :3].size(), z=0.1, device=self.device)
+            object_pose[:, :3] = sample_circle((self.cfg.env_spacing * 0.75) / 2, ((self.cfg.env_spacing * 0.75) / 2) - 1.5, size=object_pose[:, :3].size(), z=0.1, device=self.device)
             object_pose[:, :3] += env_positions
             object_pose[:, 3:] = sample_yaw(num_resets, device=self.device)
 
@@ -471,6 +471,10 @@ class RobomasterEnv(DirectRLEnv):
 
 
         super()._reset_idx(env_ids)
+        
+        
+        print(self._lidar_scanner.data.ray_distances)
+        
         # TODO logging
         # # Logging
         # extras = dict()
