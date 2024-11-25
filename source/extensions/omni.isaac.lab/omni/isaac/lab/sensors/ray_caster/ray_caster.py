@@ -113,11 +113,8 @@ class RayCaster(SensorBase):
         super().reset(env_ids)
 
 
-        # TODO debug
-        from omni.isaac.lab.utils.timer import Timer
-        with Timer("update meshes: "):
-            # reinit meshes to update positons
-            self._update_warp_meshes(env_ids)
+        # reinit meshes to update positons
+        self._update_warp_meshes(env_ids)
 
         # resolve None
         if env_ids is None:
@@ -273,10 +270,12 @@ class RayCaster(SensorBase):
         
     def _update_warp_meshes(self, env_ids: Sequence[int] | None = None):
         # TODO update all non view meshes 
+        
+        print("env_ids", env_ids)
         if env_ids is not None:
             for env_id in env_ids:
                  for view in self._views:
-
+                     
                     transformations_w = self._views[view].get_transforms()
                     prim_path = self._views[view].prim_paths[env_id]
                                          
@@ -284,9 +283,11 @@ class RayCaster(SensorBase):
                     points = self._origin_points[prim_path]
                     indices = self._origin_indices[prim_path]
                     # Transform mesh into world frame
-
                     pos = Gf.Vec3d(transformations_w[env_id][0].item(), transformations_w[env_id][1].item(), transformations_w[env_id][2].item())
-                    rotation = Gf.Rotation(Gf.Quatf(transformations_w[env_id][3].item(), transformations_w[env_id][4].item(), transformations_w[env_id][5].item(), transformations_w[env_id][6].item()))
+                    
+                    # TODO rots is strange, had to change order of quat to get correct rotation, order of quaterion set with write_root_pose_to_sim gehts changes with get_transforation
+                    rotation = Gf.Rotation(Gf.Quatf(transformations_w[env_id][6].item(), transformations_w[env_id][3].item(), transformations_w[env_id][4].item(), transformations_w[env_id][5].item()))
+                    
                     transform: Gf.Matrix4d = Gf.Matrix4d(rotation, pos)
                     transformed_points_list = []
                     for point in points:
@@ -343,18 +344,19 @@ class RayCaster(SensorBase):
 
         # ray cast based on the sensor poses
         if self.cfg.attach_yaw_only:
-            # only yaw orientation is considered and directions are not rotated
+            # only yaw orientation is considered and directions are rotated
             ray_starts_w = quat_apply_yaw(quat_w.repeat(1, self.num_rays), self.ray_starts[env_ids])
             ray_starts_w += pos_w.unsqueeze(1)
-            ray_directions_w = self.ray_directions[env_ids]
+            # ray_directions_w = self.ray_directions[env_ids] # TODO originally they did not rotate the directions, wbut why?
+            ray_directions_w = quat_apply_yaw(quat_w.repeat(1, self.num_rays), self.ray_directions[env_ids])
         else:
             # full orientation is considered
             ray_starts_w = quat_apply(quat_w.repeat(1, self.num_rays), self.ray_starts[env_ids])
             ray_starts_w += pos_w.unsqueeze(1)
             ray_directions_w = quat_apply(quat_w.repeat(1, self.num_rays), self.ray_directions[env_ids])
         # ray cast and store the hits
-        ray_hits = torch.zeros(self._view.count, self.num_rays, 3, device=self._device)
-        ray_distances = torch.full((self._view.count, self.num_rays), float('inf'), device=self._device)
+        ray_hits = torch.zeros(len(env_ids), self.num_rays, 3, device=self._device)
+        ray_distances = torch.full((len(env_ids), self.num_rays), float('inf'), device=self._device)
         
         # for mesh in self.meshes:
         for mesh in self.meshes:
