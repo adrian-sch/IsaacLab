@@ -12,7 +12,8 @@ params:
     name: continuous_a2c_logstd
 
   network:
-    name: testnet
+    # name: testnet
+    name: actor_critic
     separate: False
     space:
       continuous:

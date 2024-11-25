@@ -6,16 +6,17 @@ from rl_games.algos_torch.network_builder import NetworkBuilder
 
 class TestNet(NetworkBuilder.BaseNetwork):
     def __init__(self, params, **kwargs):
-        nn.Module.__init__(self)        
-
+        nn.Module.__init__(self)
         actions_num = kwargs.pop('actions_num')
         input_shape = kwargs.pop('input_shape')
         self.num_seqs = num_seqs = kwargs.pop('num_seqs', 1)
         num_inputs = 0
 
-        assert(type(input_shape) is dict)
-        for k,v in input_shape.items():
-            num_inputs +=v[0]
+        num_inputs = input_shape[0]
+
+        # assert(type(input_shape) is dict)
+        # for k,v in input_shape.items():
+        #     num_inputs +=v[0]
 
         self.central_value = params.get('central_value', False)
         self.value_size = kwargs.pop('value_size', 1)
@@ -25,23 +26,25 @@ class TestNet(NetworkBuilder.BaseNetwork):
         self.mean_linear = nn.Linear(64, actions_num)
         self.value_linear = nn.Linear(64, self.value_size)
 
+
+        self._sigma = nn.Parameter(torch.zeros(actions_num, requires_grad=True, dtype=torch.float32), requires_grad=True)
+
+
     def is_rnn(self):
         return False
 
     def forward(self, obs):
         obs = obs['obs']
-        obs = torch.cat([obs['pos'], obs['info']], axis=-1)
         x = F.relu(self.linear1(obs))
         x = F.relu(self.linear2(x))
         x = F.relu(self.linear3(x))
-        action = self.mean_linear(x)
+        mu = self.mean_linear(x)
+        sigma = self._sigma
         value = self.value_linear(x)
-        if self.central_value:
-            return value, None
         
-        # TODO return those values
-        # mu, logstd, value, states
-        return action, value, None
+        # Has to retutn (mu, logstd, value, states) 
+        # states is for RNN so we can ignore it here
+        return mu, sigma, value, None
     
 
 
