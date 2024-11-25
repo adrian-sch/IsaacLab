@@ -21,3 +21,4 @@ code ~/.bashrc
 ./isaaclab.sh -p source/standalone/environments/random_agent.py --task Isaac-Robomaster-Glide-Direct-v0 --num_envs 1024
 ./isaaclab.sh -p source/standalone/environments/random_agent.py --task Isaac-Robomaster-Glide-Direct-v0 --num_envs 1024 --livestream 1
 ./isaaclab.sh -p source/standalone/environments/random_agent.py --task Isaac-Robomaster-Glide-Direct-v0 --num_envs 4
+./isaaclab.sh -p source/standalone/environments/random_agent.py --task Isaac-Robomaster-Direct-v0 --num_envs 4 --livestream 1

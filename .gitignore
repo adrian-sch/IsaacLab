@@ -57,3 +57,6 @@ _build
 **/runs/*
 **/logs/*
 **/recordings/*
+
+# Bash history for docker
+**.bash_history
