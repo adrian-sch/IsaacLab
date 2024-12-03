@@ -135,10 +135,17 @@ class RlGamesVecEnvWrapper(IVecEnv):
         return self.env.render_mode
 
     @property
-    def observation_space(self) -> gym.spaces.Box:
+    def observation_space(self) -> gym.spaces.Box | gym.spaces.Dict:
         """Returns the :attr:`Env` :attr:`observation_space`."""
         # note: rl-games only wants single observation space
         policy_obs_space = self.unwrapped.single_observation_space["policy"]
+        if isinstance(policy_obs_space, gymnasium.spaces.Dict):
+            return gym.spaces.Dict(
+                {
+                    k: gym.spaces.Box(-self._clip_obs, self._clip_obs, v.shape)
+                    for k, v in policy_obs_space.spaces.items()
+                }
+            )
         if not isinstance(policy_obs_space, gymnasium.spaces.Box):
             raise NotImplementedError(
                 f"The RL-Games wrapper does not currently support observation space: '{type(policy_obs_space)}'."

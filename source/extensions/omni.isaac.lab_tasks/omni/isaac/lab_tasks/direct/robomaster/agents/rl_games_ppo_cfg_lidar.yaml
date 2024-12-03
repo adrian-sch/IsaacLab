@@ -4,6 +4,8 @@ params:
   # environment wrapper clipping
   env:
     clip_actions: 1.0
+    gt_obs: False
+    use_lidar: True
 
   algo:
     name: a2c_continuous
@@ -12,29 +14,41 @@ params:
     name: continuous_a2c_logstd
 
   network:
-    # name: testnet
-    name: actor_critic
-    separate: False
-    space:
-      continuous:
-        mu_activation: None
-        sigma_activation: None
 
-        mu_init:
-          name: default
-        sigma_init:
-          name: const_initializer
-          val: 0
-        fixed_sigma: True
+    name: christian_net
+    separate: true
+    fixed_sigma: true
+
+    action_limiter:
+      begin: 0.0
+      end: 1.0
+
+    cnn:
+      type: "impala1d"
+      activation: "relu"
+      min_pooling: 5
+      convs:
+        - filters: 24
+          kernel_size: 7
+          stride: 3
+          padding: 0
+        - filters: 16
+          kernel_size: 5
+          stride: 2
+          padding: 0
+
     mlp:
-      units: [128, 128, 128]
-      activation: elu
-      d2rl: False
+      activation: "relu"
+      units: [256]
 
-      initializer:
-        name: default
-      regularizer:
-        name: None
+    mlp_sensor:
+      activation: "relu"
+      units: [96]
+
+    mlp_lidar:
+      activation: "relu"
+      units: [256]
+
 
   load_checkpoint: False # flag which sets whether to load the checkpoint
   load_path: '' # path to the checkpoint to load

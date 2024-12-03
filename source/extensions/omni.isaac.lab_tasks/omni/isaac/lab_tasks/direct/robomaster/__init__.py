@@ -18,6 +18,9 @@ from .test_network import TestNetBuilder
 from rl_games.algos_torch import model_builder
 model_builder.register_network('testnet', TestNetBuilder)
 
+from .network.actor_critic_network_builder import ActorCriticNetworkBuilder
+model_builder.register_network('christian_net', ActorCriticNetworkBuilder)
+
 ##
 # Register Gym environments.
 ##
@@ -28,7 +31,8 @@ gym.register(
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": RobomasterEnvCfg,
-        "rl_games_cfg_entry_point": f"{agents.__name__}:rl_games_ppo_cfg.yaml",
+        # "rl_games_cfg_entry_point": f"{agents.__name__}:rl_games_ppo_cfg.yaml",
+        "rl_games_cfg_entry_point": f"{agents.__name__}:rl_games_ppo_cfg_lidar.yaml",
     },
 )
 
