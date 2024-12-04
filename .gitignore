@@ -1,3 +1,14 @@
+# Note: These files are kept for development purposes only.
+!.vscode/tools/launch.template.json
+!.vscode/tools/settings.template.json
+!.vscode/tools/setup_vscode.py
+!.vscode/extensions.json
+!.vscode/tasks.json
+
+# Ignore all other files
+.python.env
+*.json
+
 # C++
 **/cmake-build*/
 **/build*/
