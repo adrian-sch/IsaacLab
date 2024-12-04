@@ -293,10 +293,21 @@ class RlGamesVecEnvWrapper(IVecEnv):
         """
         # process policy obs
         obs = obs_dict["policy"]
-        # clip the observations
-        obs = torch.clamp(obs, -self._clip_obs, self._clip_obs)
-        # move the buffer to rl-device
-        obs = obs.to(device=self._rl_device).clone()
+
+        if isinstance(obs, dict):
+            for key, value in obs.items():
+                obs[key] = torch.clamp(value, -self._clip_obs, self._clip_obs)
+                obs[key] = obs[key].to(device=self._rl_device).clone()
+        elif isinstance(obs, torch.Tensor):
+            obs = torch.clamp(obs, -self._clip_obs, self._clip_obs)
+            obs = obs.to(device=self._rl_device).clone()
+        else:
+            raise NotImplementedError(f"Unsupported data type: {type(obs)}")
+
+        # # clip the observations
+        # obs = torch.clamp(obs, -self._clip_obs, self._clip_obs)
+        # # move the buffer to rl-device
+        # obs = obs.to(device=self._rl_device).clone()
 
         # check if asymmetric actor-critic or not
         if self.rlg_num_states > 0:

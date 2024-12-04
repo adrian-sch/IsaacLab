@@ -117,115 +117,6 @@ CUBE_CFG = RigidObjectCfg(
         # init_state=RigidObjectCfg.InitialStateCfg(),
     )
 
-# @configclass
-# class RobomasterEnvCfg(DirectRLEnvCfg):
-#     # env
-#     episode_length_s = 20.0
-#     decimation = 30 # 10 Hz
-#     action_scale_x_pos = 3.5
-#     action_scale_x_neg = 0.5
-#     action_scale_y = 2.0
-#     action_scale_ang = 3.14
-    
-#     num_objects = 5
-
-#     action_space = 3
-#     observation_space = 3 + 3 * num_objects
-#     state_space = 0 # only used for RNNs, defined to avoid warning
-
-#     num_envs = 1024
-#     env_spacing = 10.0
-
-#     fin_dist = 0.25
-
-#     # kinematics from https://research.ijcaonline.org/volume113/number3/pxc3901586.pdf
-#     wheel_radius = 0.05  # radius of the wheel
-#     wheel_lx = 0.1  # distance between wheels and the base in x
-#     wheel_ly = 0.1  # distance between wheels and the base in y
-#     dist = wheel_lx + wheel_ly
-
-#     # simulation
-#     sim: SimulationCfg = SimulationCfg(
-#         dt=1 / 300, # 300 Hz
-#         render_interval=decimation,
-#         disable_contact_processing=True,
-#         physics_material=sim_utils.RigidBodyMaterialCfg(
-#             friction_combine_mode="multiply",
-#             restitution_combine_mode="multiply",
-#             static_friction=1.0, # TODO check friction
-#             dynamic_friction=1.0,
-#             restitution=0.0,
-#         ),
-#     )
-#     terrain = TerrainImporterCfg(
-#         prim_path="/World/ground",
-#         terrain_type="plane",
-#         collision_group=-1,
-#         physics_material=sim_utils.RigidBodyMaterialCfg(
-#             friction_combine_mode="multiply",
-#             restitution_combine_mode="multiply",
-#             static_friction=1.0, # TODO check friction
-#             dynamic_friction=1.0,
-#             restitution=0.0,
-#         ),
-#         debug_vis=False,
-#     )
-
-#     # scene
-#     scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=num_envs, env_spacing=env_spacing, replicate_physics=True)
-
-#     # robot
-#     robot: ArticulationCfg = ROBOMASTER_CFG.replace(prim_path="/World/envs/env_.*/Robot")
-
-#     # -- Goals
-#     goal_marker_cfg = VisualizationMarkersCfg(
-#         prim_path="/Visuals/goal_marker",
-#         markers={
-#             "cylinder": sim_utils.CylinderCfg(
-#                 radius=fin_dist,
-#                 height=0.2,
-#                 visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
-#             ),
-#         },
-#     )
-
-#     # walls
-#     arena: RigidObjectCfg = ARENA_CFG.replace(prim_path="/World/envs/env_.*/Arena")
-
-#     # objects
-#     objects_cfgs = []
-#     object_prim_paths = []
-#     # Rigid Object
-#     for i in range(num_objects):
-#         object_prim_path = f"/World/envs/env_.*/object_{i}"
-#         objects_cfgs.append(CUBE_CFG.replace(prim_path=object_prim_path))
-#         object_prim_paths.append(object_prim_path)
-    
-#     #lidar config
-#     lidar_scanner_cfg = RayCasterCfg(
-#         prim_path="/World/envs/env_.*/Robot/base_link",
-#         mesh_prim_paths=["/World/ground"] + object_prim_paths,
-#         pattern_cfg=patterns.LidarPatternCfg(channels=1, vertical_fov_range=(0.0, 0.0), horizontal_fov_range=(-135.0, 135.0), horizontal_res=0.12),
-#         offset=OffsetCfg(pos=(0.1, 0.0, 0.083)),
-#         attach_yaw_only=True,
-#         debug_vis=True,
-#         max_distance=5.0
-#     )
-
-#     # TODO reward sclaes
-#     # reward scales
-#     # lin_vel_reward_scale = 1.0
-#     # yaw_rate_reward_scale = 0.5
-#     # z_vel_reward_scale = -2.0
-#     # ang_vel_reward_scale = -0.05
-#     # joint_torque_reward_scale = -2.5e-5
-#     # joint_accel_reward_scale = -2.5e-7
-#     # action_rate_reward_scale = -0.01
-#     # feet_air_time_reward_scale = 0.5
-#     # undersired_contact_reward_scale = -1.0
-#     # flat_orientation_reward_scale = -5.0
-
-
 @configclass
 class RobomasterEnvCfg(DirectRLEnvCfg):
     # env
@@ -240,7 +131,7 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
     
     action_space = 3
     observation_space = {
-    "lidar": [3,224], # TODO get lidar raycount
+    "lidar": [3,2250], # TODO get lidar raycount
     "sensor": 3
     }
     state_space = 0 # only used for RNNs, defined to avoid warning
@@ -320,7 +211,7 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
         pattern_cfg=patterns.LidarPatternCfg(channels=1, vertical_fov_range=(0.0, 0.0), horizontal_fov_range=(-135.0, 135.0), horizontal_res=0.12),
         offset=OffsetCfg(pos=(0.1, 0.0, 0.083)),
         attach_yaw_only=True,
-        debug_vis=True,
+        debug_vis=False,
         max_distance=5.0
     )
 
@@ -360,6 +251,7 @@ class RobomasterEnv(DirectRLEnv):
         self._dist_to_goal = torch.zeros(self.num_envs, device=self.device)
         self._dist_to_goal_buf = torch.zeros(self.num_envs, device=self.device)
         self._dist_to_objects = torch.zeros(self.num_envs, self.cfg.num_objects, device=self.device)
+        self._lidar_buf = torch.zeros(self.num_envs, *tuple(self.cfg.observation_space['lidar']), device=self.device)
 
         # Get specific body indices
         self._joint_ids, _ = self._robot.find_joints(["base_lf", "base_rf", "base_lb", "base_rb"])
@@ -450,37 +342,35 @@ class RobomasterEnv(DirectRLEnv):
         rel_goal_pos_rot = torch.zeros(self.num_envs, 2, device=self.device)
         rel_goal_pos_rot[:, 0] = rel_goal_pos[:, 0] * torch.cos(-robo_yaw.squeeze()) - rel_goal_pos[:, 1] * torch.sin(-robo_yaw.squeeze())
         rel_goal_pos_rot[:, 1] = rel_goal_pos[:, 0] * torch.sin(-robo_yaw.squeeze()) + rel_goal_pos[:, 1] * torch.cos(-robo_yaw.squeeze())
-
+   
+        # Shift the buffer to the back
+        self._lidar_buf[:, 1:] = self._lidar_buf[:, :-1]
+        # Insert the new scan at the front
+        self._lidar_buf[:, 0] = self._lidar_scanner.data.ray_distances
 
         dist_to_objecs = torch.empty(self.num_envs, 0, device=self.device)
-        rel_objets_pos = torch.empty(self.num_envs, 0, 2, device=self.device)
-
         # only for testing with GT postions of obstacles
-        # for object in self._objects:
-        #     dist = torch.norm(object.data.root_pos_w - self._robot.data.root_pos_w, dim=-1).unsqueeze(1)
-        #     dist_to_objecs = torch.cat((dist_to_objecs, dist), dim=1)
-            
-        #     rel_pos = object.data.root_pos_w - self._robot.data.root_pos_w
-        #     rel_rot_pos = torch.zeros(self.num_envs, 2, device=self.device)
-        #     rel_rot_pos[:, 0] = rel_pos[:, 0] * torch.cos(-robo_yaw.squeeze()) - rel_pos[:, 1] * torch.sin(-robo_yaw.squeeze())
-        #     rel_rot_pos[:, 1] = rel_pos[:, 0] * torch.sin(-robo_yaw.squeeze()) + rel_pos[:, 1] * torch.cos(-robo_yaw.squeeze())
-        #     rel_objets_pos = torch.cat((rel_objets_pos, rel_rot_pos.unsqueeze(1)), dim=1)
+        for object in self._objects:
+            dist = torch.norm(object.data.root_pos_w - self._robot.data.root_pos_w, dim=-1).unsqueeze(1)
+            dist_to_objecs = torch.cat((dist_to_objecs, dist), dim=1)
         
         self._dist_to_objecs = dist_to_objecs
-        object_obs = torch.cat((rel_objets_pos, self._dist_to_objecs.unsqueeze(-1)), dim=-1).reshape(self.num_envs, -1)
-            
-        obs = torch.cat(
-            [
-                tensor
-                for tensor in (
-                    rel_goal_pos_rot,
-                    self._dist_to_goal.unsqueeze(-1),
-                    object_obs
-                )
-                if tensor is not None
-            ],
-            dim=-1,
-        )
+
+        obs = {
+            "lidar": self._lidar_buf,
+            "sensor": torch.cat(
+                [
+                    tensor
+                    for tensor in (
+                        rel_goal_pos_rot,
+                        self._dist_to_goal.unsqueeze(-1)
+                    )
+                    if tensor is not None
+                ],
+                dim=-1,
+            ),
+        }
+
         observations = {"policy": obs}
         return observations
 
@@ -494,14 +384,11 @@ class RobomasterEnv(DirectRLEnv):
         
         reward = torch.where(self._dist_to_goal < self.cfg.fin_dist, 10000, reward)
         
-        # penalty for backwards or sideways movement
-        # reward += torch.where(self._actions[:,0] < 0, self._actions[:,0] * 10.0, 0)
-        # reward += (torch.abs(self._actions[:,1]) * -0.1)
-        
         # penalty for change in action for smoother actions
         reward += (self._previous_actions - self._actions).pow(2).sum(dim=1) * -1.0
         self._previous_actions = self._actions.clone()        
 
+        # TODO probably we need this? Or can we do this with the lidar? Or maybe even a collision sensor? But positions would be better for reward shaping.
         # penalty for distance to objects
         reward += -1/(self._dist_to_objecs ** 3).sum(dim=-1)
         reward += torch.where(torch.any(self._dist_to_objecs < 0.75, dim=-1), -1000, 0)

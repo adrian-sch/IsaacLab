@@ -75,8 +75,8 @@ class ActorCriticNetwork(BaseNetwork):
 
         self.to(self._device)
 
-    def forward(self, observation: {str, torch.Tensor}) -> (torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor):
-        lidar, sensor = observation_split_into_lidar_and_sensor(observation)
+    def forward(self, observation):
+        lidar, sensor = observation_split_into_lidar_and_sensor(observation['obs'])
         lidar = lidar["lidar"].to(self._device)
         sensor = torch.cat([x.flatten(start_dim=1) for x in sensor.values()], dim=1).to(self._device)
 
@@ -125,7 +125,7 @@ class ActorCriticNetwork(BaseNetwork):
         else:
             sigma = self._sigma(a_out)
 
-        return mu, sigma, value
+        return mu, sigma, value, None
 
     def act(self, observation: {str, torch.Tensor}):
         # Check for NaNs in the observation dictionary

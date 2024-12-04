@@ -269,9 +269,8 @@ class RayCaster(SensorBase):
             )
         
     def _update_warp_meshes(self, env_ids: Sequence[int] | None = None):
-        # TODO update all non view meshes 
-        
-        print("env_ids", env_ids)
+        # TODO also update all "non view" meshes 
+
         if env_ids is not None:
             for env_id in env_ids:
                  for view in self._views:
@@ -318,7 +317,6 @@ class RayCaster(SensorBase):
         self._data.quat_w = torch.zeros(self._view.count, 4, device=self._device)
         self._data.ray_hits_w = torch.zeros(self._view.count, self.num_rays, 3, device=self._device)
         self._data.ray_distances = torch.zeros(self._view.count, self.num_rays, device=self._device)
-        self._data.ray_distances = torch.zeros(self._view.count, self.num_rays, device=self._device)
 
     def _update_buffers_impl(self, env_ids: Sequence[int]):
         """Fills the buffers of the sensor data."""
@@ -356,7 +354,9 @@ class RayCaster(SensorBase):
             ray_directions_w = quat_apply(quat_w.repeat(1, self.num_rays), self.ray_directions[env_ids])
         # ray cast and store the hits
         ray_hits = torch.zeros(len(env_ids), self.num_rays, 3, device=self._device)
-        ray_distances = torch.full((len(env_ids), self.num_rays), float('inf'), device=self._device)
+
+        # init ray_distances with max_distance
+        ray_distances = torch.full((len(env_ids), self.num_rays), self.cfg.max_distance, device=self._device)
         
         # for mesh in self.meshes:
         for mesh in self.meshes:
