@@ -125,6 +125,9 @@ class ActorCriticNetwork(BaseNetwork):
         else:
             sigma = self._sigma(a_out)
 
+        # Ensure sigma is always positive
+        sigma = torch.clamp(sigma, min=1e-6)
+
         return mu, sigma, value, None
 
     def act(self, observation: {str, torch.Tensor}):
