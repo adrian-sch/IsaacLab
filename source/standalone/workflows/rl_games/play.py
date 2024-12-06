@@ -137,7 +137,7 @@ def main():
 
     # reset environment
     obs = env.reset()
-    if isinstance(obs, dict):
+    if isinstance(obs, dict) and "obs" in obs:
         obs = obs["obs"]
     timestep = 0
     # required: enables the flag for batched observations
