@@ -36,9 +36,16 @@ class RayCasterCfg(SensorBaseCfg):
     """The list of mesh primitive paths to ray cast against.
 
     Note:
-        Currently, only a single static mesh is supported. We are working on supporting multiple
-        static meshes and dynamic meshes.
+        Currently, only static meshes are supported. We are working on supporting dynamic meshes.
     """
+
+    # view_paths: list[tuple[str, list[str]]]
+    # """The list of view paths with corrosponding colliders to ray cast against. 
+    # The tuple consisits of path to the rigid object in the view and a list of Colliders inside this view.
+
+    # Note:
+    #     Currently, only static views are supported. We are working on dynamic views.
+    # """
 
     offset: OffsetCfg = OffsetCfg()
     """The offset pose of the sensor's frame from the sensor's parent frame. Defaults to identity."""
