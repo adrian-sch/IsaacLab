@@ -12,7 +12,7 @@ import os
 import omni.isaac.lab.sim as sim_utils
 from omni.isaac.lab.assets import Articulation, ArticulationCfg
 from omni.isaac.lab.actuators import ImplicitActuatorCfg
-from omni.isaac.lab.envs import DirectRLEnv, DirectRLEnvCfg
+from omni.isaac.lab.envs import DirectRLEnv, DirectRLEnvCfg, ViewerCfg
 from omni.isaac.lab.scene import InteractiveSceneCfg
 from omni.isaac.lab.sensors import ContactSensor, ContactSensorCfg, RayCaster, RayCasterCfg, patterns, OffsetCfg
 from omni.isaac.lab.sim import SimulationCfg
@@ -119,6 +119,14 @@ CUBE_CFG = RigidObjectCfg(
 
 @configclass
 class RobomasterEnvCfg(DirectRLEnvCfg):
+
+    # TODO flag for when video is recorded
+    # viewer: ViewerCfg = ViewerCfg(
+    #     eye=(10.0, 10.0, 10.0),
+    #     lookat=(0.0, 0.0, 0.0),
+    #     resolution=(1920, 1080),
+    # )
+
     # env
     episode_length_s = 20.0
     decimation = 30 # 10 Hz
@@ -131,8 +139,8 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
     
     action_space = 3
     observation_space = {
-    "lidar": [3,2250], # TODO get lidar raycount
-    "sensor": 3
+    "lidar": [3,2250], # TODO get lidar raycount from sensor config
+    "sensor": 2
     }
     state_space = 0 # only used for RNNs, defined to avoid warning
 
@@ -159,6 +167,16 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
             dynamic_friction=1.0,
             restitution=0.0,
         ),
+        # TODO flag for when video is recorded
+        # TODO only for visualization, reduces performance
+        # render=sim_utils.RenderCfg(
+        #     samples_per_pixel=2,
+        #     enable_ambient_occlusion=True,
+        #     dlss_mode=2,
+        #     enable_reflections=True,
+        #     enable_translucency=True,
+        #     enable_global_illumination=True,
+        # )
     )
     terrain = TerrainImporterCfg(
         prim_path="/World/ground",
@@ -197,7 +215,11 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
 
     # objects
     objects_cfgs = []
-    object_prim_paths = []
+    object_prim_paths = [
+        # "/World/envs/env_.*/Arena",
+        # "/World/envs/env_.*/Arena/Simple_Collider_split",
+        # "/World/envs/env_.*/Arena/Simple_Collider_split/Cube_001_001",
+        ]
     # Rigid Object
     for i in range(num_objects):
         object_prim_path = f"/World/envs/env_.*/object_{i}"
@@ -211,7 +233,7 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
         pattern_cfg=patterns.LidarPatternCfg(channels=1, vertical_fov_range=(0.0, 0.0), horizontal_fov_range=(-135.0, 135.0), horizontal_res=0.12),
         offset=OffsetCfg(pos=(0.1, 0.0, 0.083)),
         attach_yaw_only=True,
-        debug_vis=False,
+        debug_vis=True, # TODO flag for when video is recorded
         max_distance=5.0
     )
 
@@ -343,10 +365,17 @@ class RobomasterEnv(DirectRLEnv):
         rel_goal_pos_rot[:, 0] = rel_goal_pos[:, 0] * torch.cos(-robo_yaw.squeeze()) - rel_goal_pos[:, 1] * torch.sin(-robo_yaw.squeeze())
         rel_goal_pos_rot[:, 1] = rel_goal_pos[:, 0] * torch.sin(-robo_yaw.squeeze()) + rel_goal_pos[:, 1] * torch.cos(-robo_yaw.squeeze())
    
+        # Normalize relative goal position
+        rel_goal_pos_rot = rel_goal_pos_rot / self.cfg.env_spacing
+
+        # normalize lidar data
+        lidar_data = self._lidar_scanner.data.ray_distances / self.cfg.lidar_scanner_cfg.max_distance
+        # lidar_data = self._lidar_scanner.data.ray_distances
+
         # Shift the buffer to the back
         self._lidar_buf[:, 1:] = self._lidar_buf[:, :-1]
         # Insert the new scan at the front
-        self._lidar_buf[:, 0] = self._lidar_scanner.data.ray_distances
+        self._lidar_buf[:, 0] = lidar_data
 
         dist_to_objecs = torch.empty(self.num_envs, 0, device=self.device)
         # only for testing with GT postions of obstacles
@@ -358,17 +387,20 @@ class RobomasterEnv(DirectRLEnv):
 
         obs = {
             "lidar": self._lidar_buf,
-            "sensor": torch.cat(
-                [
-                    tensor
-                    for tensor in (
-                        rel_goal_pos_rot,
-                        self._dist_to_goal.unsqueeze(-1)
-                    )
-                    if tensor is not None
-                ],
-                dim=-1,
-            ),
+            "sensor":             
+                # TODO check this again, sould also work with just the rel_goal_pos_rot
+                rel_goal_pos_rot,
+                # torch.cat(
+                #     [
+                #         tensor
+                #         for tensor in (
+                #             rel_goal_pos_rot,
+                #             self._dist_to_goal.unsqueeze(1),
+                #         )
+                #         if tensor is not None
+                #     ],
+                #     dim=-1,
+                # ),
         }
 
         observations = {"policy": obs}
@@ -378,20 +410,23 @@ class RobomasterEnv(DirectRLEnv):
 
         if self._dist_to_goal_buf is None:
             self._dist_to_goal_buf = self._dist_to_goal
-        reward = (self._dist_to_goal_buf - self._dist_to_goal) * 50.0
+        reward = (self._dist_to_goal_buf - self._dist_to_goal)
+        
         # reward += (5.0 - dist_to_goal) * 1.0
         self._dist_to_goal_buf = self._dist_to_goal
         
-        reward = torch.where(self._dist_to_goal < self.cfg.fin_dist, 10000, reward)
-        
+        # TODO is this needed => if kept maybe an ablation study can be done?
         # penalty for change in action for smoother actions
-        reward += (self._previous_actions - self._actions).pow(2).sum(dim=1) * -1.0
-        self._previous_actions = self._actions.clone()        
+        # reward += (self._previous_actions - self._actions).pow(2).sum(dim=1) * -0.005
+        # self._previous_actions = self._actions.clone()
 
         # TODO probably we need this? Or can we do this with the lidar? Or maybe even a collision sensor? But positions would be better for reward shaping.
         # penalty for distance to objects
-        reward += -1/(self._dist_to_objecs ** 3).sum(dim=-1)
-        reward += torch.where(torch.any(self._dist_to_objecs < 0.75, dim=-1), -1000, 0)
+        reward += -1/(self._dist_to_objecs ** 2).sum(dim=-1) * 0.5
+        # reward += torch.where(torch.any(self._dist_to_objecs < 1.5, dim = -1), torch.min(self._dist_to_objects, dim = -1)[0] - 2.0, 0)
+        
+        reward = torch.where(self._dist_to_goal < self.cfg.fin_dist, 10, reward)
+        reward = torch.where(torch.any(self._dist_to_objecs < 0.75, dim = -1), -10, reward) # TODO check this with an contact sensor
         
         return reward
 
@@ -404,6 +439,7 @@ class RobomasterEnv(DirectRLEnv):
         # check distance to goal
         died = torch.where(self._dist_to_goal > self.cfg.env_spacing , ones, died)
         
+        # TODO check this with a contact sensor
         # check distance to objects
         died = torch.where(torch.any(self._dist_to_objecs < 0.75, dim=-1), ones, died)
 
