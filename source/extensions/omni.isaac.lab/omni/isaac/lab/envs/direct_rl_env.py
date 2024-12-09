@@ -311,7 +311,6 @@ class DirectRLEnv(gym.Env):
             action = self._action_noise_model.apply(action)
 
         # process actions
-        # with Timer("[INFO]: Time taken for pre-processing actions", "pre_processing_actions"):
         self._pre_physics_step(action)
 
         # check if we need to do rendering within the physics loop
@@ -319,7 +318,6 @@ class DirectRLEnv(gym.Env):
         is_rendering = self.sim.has_gui() or self.sim.has_rtx_sensors()
 
         # perform physics stepping
-        # with Timer("[INFO]: Time taken for physics stepping in loop", "physics_stepping"):
         for _ in range(self.cfg.decimation):
             self._sim_step_counter += 1
             # set actions into buffers
@@ -327,14 +325,12 @@ class DirectRLEnv(gym.Env):
             # set actions into simulator
             self.scene.write_data_to_sim()
             # simulate
-            with Timer("[INFO]: Time taken for step sim"):
-                self.sim.step(render=False)
+            self.sim.step(render=False)
             # render between steps only if the GUI or an RTX sensor needs it
             # note: we assume the render interval to be the shortest accepted rendering interval.
             #    If a camera needs rendering at a faster frequency, this will lead to unexpected behavior.
             if self._sim_step_counter % self.cfg.sim.render_interval == 0 and is_rendering:
-                with Timer("[INFO]: Time taken for render"):
-                    self.sim.render()
+                self.sim.render()
             # update buffers at sim dt
             self.scene.update(dt=self.physics_dt)
 
@@ -351,7 +347,6 @@ class DirectRLEnv(gym.Env):
         # -- reset envs that terminated/timed-out and log the episode information
         reset_env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
         if len(reset_env_ids) > 0:
-            # with Timer(f"[INFO]: Time taken for resetting {len(reset_env_ids)} environments", "resetting"):
             self._reset_idx(reset_env_ids)
             # if sensors are added to the scene, make sure we render to reflect changes in reset
             if self.sim.has_rtx_sensors() and self.cfg.rerender_on_reset:
@@ -363,7 +358,6 @@ class DirectRLEnv(gym.Env):
                 self.event_manager.apply(mode="interval", dt=self.step_dt)
 
         # update observations
-        # with Timer("[INFO]: Time taken for computing observations", "observations"):
         self.obs_buf = self._get_observations()
 
         # add observation noise
