@@ -16,16 +16,13 @@ import omni.physics.tensors.impl.api as physx
 import warp as wp
 from omni.isaac.core.prims import XFormPrimView
 from pxr import UsdGeom, UsdPhysics, Usd, Gf
-from pxr import UsdGeom, UsdPhysics, Usd, Gf
 
 import omni.isaac.lab.sim as sim_utils
 from omni.isaac.lab.markers import VisualizationMarkers
 from omni.isaac.lab.terrains.trimesh.utils import make_plane
 from omni.isaac.lab.utils.math import convert_quat, quat_apply, quat_apply_yaw
 from omni.isaac.lab.utils.warp import convert_to_warp_mesh, raycast_mesh
-from omni.physx import get_physx_cooking_interface, get_physx_interface
 from omni.debugdraw import get_debug_draw_interface
-from omni.isaac.core.utils.stage import get_current_stage
 
 from pxr import Usd, UsdPhysics
 
@@ -167,68 +164,63 @@ class RayCaster(SensorBase):
         self._initialize_rays_impl()
 
     def _transform_points(self, points, transform) -> np.array:
-                    
         transformed_points_list = []
         for point in points:
             transformed_point = transform.Transform(Gf.Vec3d(float(point[0]), float(point[1]), float(point[2])))
             transformed_points_list.append((transformed_point[0], transformed_point[1], transformed_point[2]))
+        return np.asarray(transformed_points_list)
 
-        # Convert the list to a NumPy array
-        transformed_points = np.asarray(transformed_points_list)
-
-
-        return transformed_points
-
-    def _get_mesh(self, prim_path) -> tuple[np.array, np.array]:
-        mesh_prim = sim_utils.get_first_matching_child_prim(
-            prim_path, lambda prim: prim.GetTypeName() == "Mesh"
-        )
-        # check if valid
-        if mesh_prim is None or not mesh_prim.IsValid():
-            raise RuntimeError(f"Invalid mesh prim path: {prim_path}")
-        # cast into UsdGeomMesh
-        mesh_prim = UsdGeom.Mesh(mesh_prim)
-
+    def _get_mesh(self, mesh_prim) -> tuple[np.array, np.array]:
         return np.asarray(mesh_prim.GetPointsAttr().Get()), np.asarray(mesh_prim.GetFaceVertexIndicesAttr().Get())
 
     def _draw_mesh(self, points, indices):
-
-        print("Drawing mesh")
-
+        # TODO: only for debuging
         color = 0xffffff00
 
         for point in points:
-            print(point)
             self._debugDraw.draw_point(point, color)
 
         for i in range(len(indices)-1):
-            print(indices[i], indices[i+1])
-            print(points[indices[i]], points[indices[i+1]])
             point0 = points[indices[i]]
             point1 = points[indices[i+1]]
             self._debugDraw.draw_line(point0, color, point1, color)
 
-    def _get_colliders_mesh(self, prim_path) -> list[tuple[np.array, np.array]]:
+    def _get_meshes(self, prim_path, usd_transform : bool = True, transform : Gf.Matrix4d = None) -> tuple[list[np.array], list[np.array], list[wp.Mesh]]:
+        
+        mesh_prims = sim_utils.get_all_matching_child_prims(
+            prim_path, lambda prim: prim.HasAPI(UsdPhysics.CollisionAPI)
+        )
 
-        # force Physx to cook everything in the scene so it get cached
-        get_physx_interface().force_load_physics_from_usd()
+        wp_meshes = []
+        points_lists = []
+        indices_lists = []
+        for mesh_prim in mesh_prims:
+            # check if valid
+            if mesh_prim is None or not mesh_prim.IsValid():
+                raise RuntimeError(f"Invalid mesh prim path: {mesh_prim}")
 
-        # do stuff like this
-        num_convex_hulls = get_physx_cooking_interface().get_nb_convex_mesh_data(prim_path)
+            # cast into UsdGeomMesh
+            mesh_prim = UsdGeom.Mesh(mesh_prim)
+            points, indices = self._get_mesh(mesh_prim)
 
-        meshes = []
-        for index in range(num_convex_hulls):
-            convex_hull_data = get_physx_cooking_interface().get_convex_mesh_data(prim_path, index)
-            if convex_hull_data["num_polygons"] and convex_hull_data["num_polygons"] > 0:
-                meshes.append((
-                    np.array(convex_hull_data["vertices"]),
-                    np.array(convex_hull_data["indices"])
-                ))
+            if usd_transform:
+                # Transform mesh into world frame
+                transform : Gf.Matrix4d = mesh_prim.ComputeLocalToWorldTransform(Usd.TimeCode.Default())
 
-        # then release it
-        get_physx_interface().release_physics_objects()
+            transformed_points = self._transform_points(points, transform)
 
-        return meshes
+            wp_mesh = convert_to_warp_mesh(transformed_points, indices, device=self.device)
+
+            points_lists.append(points)
+            indices_lists.append(indices)
+            wp_meshes.append(wp_mesh)
+
+            # print info
+            omni.log.info(
+                f"Read mesh prim: {mesh_prim.GetPath()} with {len(points)} vertices and {len(indices)} faces."
+            )
+        
+        return points_lists, indices_lists, wp_meshes    
 
     def _initialize_warp_meshes(self):
 
@@ -253,66 +245,20 @@ class RayCaster(SensorBase):
 
                 # we need to use this transformation, because when fabric is used we cant get the transform from USD
                 transformations_w = mesh_view.get_transforms()
+                          
 
                 for env_id, prim_path in enumerate(mesh_view.prim_paths):
+                    pos = Gf.Vec3d(transformations_w[env_id][0].item(), transformations_w[env_id][1].item(), transformations_w[env_id][2].item())
+                    # TODO rots is strange, had to change order of quat to get correct rotation, order of quaterion set with write_root_pose_to_sim geht
+                    rotation = Gf.Rotation(Gf.Quatf(transformations_w[env_id][6].item(), transformations_w[env_id][3].item(), transformations_w[env_id][4].item(), transformations_w[env_id][5].item()))
+                    transform = Gf.Matrix4d(rotation, pos)
 
-                    # check if mesh already casted into warp mesh
-                    if mesh_prim_path in self.meshes:
-                        continue
-
-                    # # get rigid body prim
-                    # object_prim = sim_utils.find_first_matching_prim(prim_path)
-                    # rigid_body_prim = UsdPhysics.RigidBodyAPI.Apply(object_prim)
-
-                    # # check if the component has a rigid body component
-                    # if not rigid_body_prim:
-                    #     raise RuntimeError(f"Failed to create RigidBodyAPI for prim: {prim_path}")
-                    
-                    # wp_meshes = []
-                    # pointss = []
-                    # indicess = []
-                    # for child in object_prim.GetChildren():
-                    #     if UsdPhysics.ColliderAPI.HasAPI(child):
-                    #         # get the points and indices of the collider mesh
-                    #         points, indices = self._get_mesh(child.GetPath())
-                    #         pointss.append(points)
-                    #         indicess.append(indices)
-
-                    #         pos = Gf.Vec3d(transformations_w[env_id][0].item(), transformations_w[env_id][1].item(), transformations_w[env_id][2].item())
-                    #         # TODO rots is strange, had to change order of quat to get correct rotation, order of quaterion set with write_root_pose_to_sim geht
-
-                    #         rotation = Gf.Rotation(Gf.Quatf(transformations_w[env_id][6].item(), transformations_w[env_id][3].item(), transformations_w[env_id][4].item(), transformations_w[env_id][5].item()))
-                    #         transformed_points = self._transform_points(points, Gf.Matrix4d(rotation, pos))
-
-                    #         self._draw_mesh(transformed_points, indices)
-
-                    #         wp_mesh = convert_to_warp_mesh(transformed_points, indices, device=self.device)
-                    #         wp_meshes.append(wp_mesh)
-
-                    # self._origin_points[prim_path] = pointss
-                    # self._origin_indices[prim_path] = indicess
-                    # self.meshes[prim_path] = wp_meshes
-
-                    points, indices = self._get_mesh(prim_path)
-                    meshes = self._get_colliders_mesh(prim_path)
-                    wp_meshes = []
-                    for mesh in meshes:
-                        points, indices = mesh
-
-                        pos = Gf.Vec3d(transformations_w[env_id][0].item(), transformations_w[env_id][1].item(), transformations_w[env_id][2].item())
-                        # TODO rots is strange, had to change order of quat to get correct rotation, order of quaterion set with write_root_pose_to_sim geht
-
-                        rotation = Gf.Rotation(Gf.Quatf(transformations_w[env_id][6].item(), transformations_w[env_id][3].item(), transformations_w[env_id][4].item(), transformations_w[env_id][5].item()))
-                        transformed_points = self._transform_points(points, Gf.Matrix4d(rotation, pos))
-
-                        self._draw_mesh(transformed_points, indices)
-
-                        wp_mesh = convert_to_warp_mesh(transformed_points, indices, device=self.device)
-                        wp_meshes.append(wp_mesh)
-
-                    self._origin_points[prim_path] = [points for points, _ in meshes]
-                    self._origin_indices[prim_path] = [indices for _, indices in meshes]
-                    self.meshes[prim_path] = wp_meshes
+                    (self._origin_points[prim_path], 
+                     self._origin_indices[prim_path], 
+                     self.meshes[prim_path]
+                     ) = self._get_meshes(prim_path, 
+                                          usd_transform=False, 
+                                          transform=transform)
                 continue
 
             # check if the prim is a plane - handle PhysX plane as a special case
@@ -322,58 +268,24 @@ class RayCaster(SensorBase):
             )
             # if we did not find a plane then we need to read the mesh
             if mesh_prim is None:
+                self._origin_points[mesh_prim_path] = []
+                self._origin_indices[mesh_prim_path] = []
+                self.meshes[mesh_prim_path] = []
 
-                # TODO also get the colliders here
+                (self._origin_points[mesh_prim_path], 
+                 self._origin_indices[mesh_prim_path], 
+                 self.meshes[mesh_prim_path]
+                 ) = self._get_meshes(mesh_prim_path, 
+                                      usd_transform=True)
 
-                # obtain the mesh prim
-                mesh_prim = sim_utils.get_first_matching_child_prim(
-                    mesh_prim_path, lambda prim: prim.GetTypeName() == "Mesh"
-                )
-                # check if valid
-                if mesh_prim is None or not mesh_prim.IsValid():
-                    raise RuntimeError(f"Invalid mesh prim path: {mesh_prim_path}")
-                # cast into UsdGeomMesh
-                mesh_prim = UsdGeom.Mesh(mesh_prim)
-                # read the vertices and faces
-                points = np.asarray(mesh_prim.GetPointsAttr().Get())
-                # Transform mesh into world frame
-                time = Usd.TimeCode.Default()
-                transform : Gf.Matrix4d = mesh_prim.ComputeLocalToWorldTransform(time)
-                transformed_points_list = []
-                for point in points:
-                    transformed_point = transform.Transform(Gf.Vec3d(float(point[0]), float(point[1]), float(point[2])))
-                    transformed_points_list.append((transformed_point[0], transformed_point[1], transformed_point[2]))
-
-                # Convert the list to a NumPy array
-                transformed_points = np.asarray(transformed_points_list)
-
-                # Transform mesh into world frame
-                time = Usd.TimeCode.Default()
-                transform : Gf.Matrix4d = mesh_prim.ComputeLocalToWorldTransform(time)
-                transformed_points_list = []
-                for point in points:
-                    transformed_point = transform.Transform(Gf.Vec3d(float(point[0]), float(point[1]), float(point[2])))
-                    transformed_points_list.append((transformed_point[0], transformed_point[1], transformed_point[2]))
-
-                # Convert the list to a NumPy array
-                transformed_points = np.asarray(transformed_points_list)
-
-                indices = np.asarray(mesh_prim.GetFaceVertexIndicesAttr().Get())
-                wp_mesh = convert_to_warp_mesh(transformed_points, indices, device=self.device)
-
-                self._origin_points[mesh_prim_path] = [points]
-                self._origin_indices[mesh_prim_path] = [indices]
-                # print info
-                omni.log.info(
-                    f"Read mesh prim: {mesh_prim.GetPath()} with {len(points)} vertices and {len(indices)} faces."
-                )
             else:
+                # create an infinite plane mesh
                 mesh = make_plane(size=(2e6, 2e6), height=0.0, center_zero=True)
                 wp_mesh = convert_to_warp_mesh(mesh.vertices, mesh.faces, device=self.device)
                 # print info
                 omni.log.info(f"Created infinite plane mesh prim: {mesh_prim.GetPath()}.")
-            # add the warp mesh to the list
-            self.meshes[mesh_prim_path] = [wp_mesh]
+                # add the warp mesh to the list
+                self.meshes[mesh_prim_path] = [wp_mesh]
 
         # throw an error if no meshes are found
         if all([mesh_prim_path not in self.meshes for mesh_prim_path in self.cfg.mesh_prim_paths]):
@@ -383,34 +295,33 @@ class RayCaster(SensorBase):
         
     def _update_warp_meshes(self, env_ids: Sequence[int] | None = None):
         # TODO also update all "non view" meshes 
-
         if env_ids is not None:
             for env_id in env_ids:
                  for view in self._views:
                     transformations_w = self._views[view].get_transforms()
                     prim_path = self._views[view].prim_paths[env_id]
-                                         
-                    # read the vertices and faces
-                    points = self._origin_points[prim_path]
-                    indices = self._origin_indices[prim_path]
-                    # Transform mesh into world frame
-                    pos = Gf.Vec3d(transformations_w[env_id][0].item(), transformations_w[env_id][1].item(), transformations_w[env_id][2].item())
-                    
-                    # TODO rots is strange, had to change order of quat to get correct rotation, order of quaterion set with write_root_pose_to_sim gehts changes with get_transforation
-                    rotation = Gf.Rotation(Gf.Quatf(transformations_w[env_id][6].item(), transformations_w[env_id][3].item(), transformations_w[env_id][4].item(), transformations_w[env_id][5].item()))
-                    
-                    transform: Gf.Matrix4d = Gf.Matrix4d(rotation, pos)
-                    transformed_points_list = []
-                    for point in points:
-                        transformed_point = transform.Transform(Gf.Vec3d(float(point[0]), float(point[1]), float(point[2])))
-                        transformed_points_list.append((transformed_point[0], transformed_point[1], transformed_point[2]))
+                    for i in range(len(self.meshes[prim_path])):
+                        # read the vertices and faces
+                        points = self._origin_points[prim_path][i]
+                        indices = self._origin_indices[prim_path][i]
+                        # Transform mesh into world frame
+                        pos = Gf.Vec3d(transformations_w[env_id][0].item(), transformations_w[env_id][1].item(), transformations_w[env_id][2].item())
+                        
+                        # TODO rots is strange, had to change order of quat to get correct rotation, order of quaterion set with write_root_pose_to_sim gehts changes with get_transforation
+                        rotation = Gf.Rotation(Gf.Quatf(transformations_w[env_id][6].item(), transformations_w[env_id][3].item(), transformations_w[env_id][4].item(), transformations_w[env_id][5].item()))
+                        
+                        transform: Gf.Matrix4d = Gf.Matrix4d(rotation, pos)
+                        transformed_points_list = []
+                        for point in points:
+                            transformed_point = transform.Transform(Gf.Vec3d(float(point[0]), float(point[1]), float(point[2])))
+                            transformed_points_list.append((transformed_point[0], transformed_point[1], transformed_point[2]))
 
-                    # Convert the list to a NumPy array
-                    transformed_points = np.asarray(transformed_points_list)
-                    wp_mesh = convert_to_warp_mesh(transformed_points, indices, device=self.device)
-                    self.meshes[prim_path] = wp_mesh
+                        # Convert the list to a NumPy array
+                        transformed_points = np.asarray(transformed_points_list)
+                        wp_mesh = convert_to_warp_mesh(transformed_points, indices, device=self.device)
+                        self.meshes[prim_path][i] = wp_mesh
 
-                    self._draw_mesh(transformed_points, indices)
+                        self._draw_mesh(transformed_points, indices)
 
     def _initialize_rays_impl(self):
         # compute ray stars and directions
@@ -473,21 +384,22 @@ class RayCaster(SensorBase):
         ray_distances = torch.full((len(env_ids), self.num_rays), self.cfg.max_distance, device=self._device)
         
         # for mesh in self.meshes:
-        for mesh in self.meshes:
+        for mesh_prim in self.meshes:
+            for mesh in self.meshes[mesh_prim]:
 
-            new_ray_hits, new_ray_distances, _, _ = raycast_mesh(
-                ray_starts_w,
-                ray_directions_w,
-                max_dist=self.cfg.max_distance,
-                mesh=self.meshes[mesh],
-                return_distance=True,
-            )
-            
-            # Update ray_distances and ray_hits where the new distances are smaller
-            closer_mask = new_ray_distances < ray_distances
-            ray_distances = torch.where(closer_mask, new_ray_distances, ray_distances)
-            expanded_mask = closer_mask.unsqueeze(-1).expand_as(ray_hits)
-            ray_hits = torch.where(expanded_mask, new_ray_hits, ray_hits)
+                new_ray_hits, new_ray_distances, _, _ = raycast_mesh(
+                    ray_starts_w,
+                    ray_directions_w,
+                    max_dist=self.cfg.max_distance,
+                    mesh=mesh,
+                    return_distance=True,
+                )
+                
+                # Update ray_distances and ray_hits where the new distances are smaller
+                closer_mask = new_ray_distances < ray_distances
+                ray_distances = torch.where(closer_mask, new_ray_distances, ray_distances)
+                expanded_mask = closer_mask.unsqueeze(-1).expand_as(ray_hits)
+                ray_hits = torch.where(expanded_mask, new_ray_hits, ray_hits)
 
         self._data.ray_hits_w[env_ids] = ray_hits
         self._data.ray_distances[env_ids] = ray_distances

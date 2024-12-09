@@ -32,6 +32,7 @@ simulation_app = app_launcher.app
 """Rest everything follows."""
 
 import torch
+import os
 
 import omni.isaac.core.utils.prims as prim_utils
 
@@ -42,13 +43,44 @@ from omni.isaac.lab.utils.assets import ISAAC_NUCLEUS_DIR
 from omni.isaac.lab.utils.timer import Timer
 
 
+# TODO add Roboamster config        
+model_dir_path = os.path.abspath("../isaac_models")
+arena_usd_path = model_dir_path + "/Isaac_RL_Stage_Blender/rl_stage.usd"
+
+ARENA_CFG = RigidObjectCfg(
+        prim_path="{ENV_REGEX_NS}/Arena",
+        spawn=sim_utils.UsdFileCfg(
+            usd_path=arena_usd_path,
+            # usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/DexCube/dex_cube_instanceable.usd",
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(
+                kinematic_enabled=True,
+                disable_gravity=True,
+                enable_gyroscopic_forces=False,
+                solver_position_iteration_count=8,
+                solver_velocity_iteration_count=0,
+                sleep_threshold=0.005,
+                stabilization_threshold=0.0025,
+                max_depenetration_velocity=1.0,
+            ),
+            mass_props=sim_utils.MassPropertiesCfg(mass=1.0),
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(),
+    )
+
+
 def define_sensor() -> RayCaster:
     """Defines the ray-caster sensor to add to the scene."""
     # Create a ray-caster sensor
     ray_caster_cfg = RayCasterCfg(
         prim_path="/World/Origin.*/ball",
-        mesh_prim_paths=["/World/cube", "/World/ground", "/World/cube2"],
-        pattern_cfg=patterns.LidarPatternCfg(channels=16, vertical_fov_range=(-10.0, 10.0), horizontal_fov_range=(-180.0, 180.0), horizontal_res=1.2),
+        mesh_prim_paths=[
+            "/World/Arena",
+            "/World/cube", 
+            # "/World/cube2", 
+            ],
+        # mesh_prim_paths=[],
+        # mesh_prim_paths=["/World/cube", "/World/ground", "/World/cube2", "/World/Arena"],
+        pattern_cfg=patterns.LidarPatternCfg(channels=32, vertical_fov_range=(-10.0, 10.0), horizontal_fov_range=(-180.0, 180.0), horizontal_res=1.2),
         attach_yaw_only=True,
         debug_vis=True,
         max_distance=10.0
@@ -68,16 +100,19 @@ def design_scene() -> dict:
     cfg = sim_utils.DistantLightCfg(intensity=2000)
     cfg.func("/World/light", cfg)
 
+    spawn_arena_cfg = ARENA_CFG.replace(prim_path="/World/Arena")
+    arena_object = RigidObject(cfg=spawn_arena_cfg)
+
     cone_spawn_cfg = sim_utils.MeshCuboidCfg(
-        size=(10.0, 10.0, 0.1),
+        size=(1.0, 1.0, 1.0),
         collision_props=sim_utils.CollisionPropertiesCfg(),
         visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
     )
     cone_spawn_cfg.func(
-        "/World/cube", cone_spawn_cfg, translation=(5.0, 5.0, 0.5), orientation=(0, 0.0436194, 0, 0.9990482)
+        "/World/cube", cone_spawn_cfg, translation=(2.0, 2.0, 0.5), orientation=(0, 0.0436194, 0, 0.9990482)
     )
     cone2_spawn_cfg = sim_utils.MeshCuboidCfg(
-        size=(10.0, 10.0, 0.1),
+        size=(2.0, 2.0, 1.0),
         collision_props=sim_utils.CollisionPropertiesCfg(),
         visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 0.0, 1.0)),
     )
@@ -106,7 +141,7 @@ def design_scene() -> dict:
     ray_caster = define_sensor()
 
     # return the scene information
-    scene_entities = {"balls": balls, "ray_caster": ray_caster}
+    scene_entities = {"balls": balls, "ray_caster": ray_caster, "arena": arena_object}
     return scene_entities
 
 
@@ -148,11 +183,7 @@ def run_simulator(sim: sim_utils.SimulationContext, scene_entities: dict):
         #     f" {torch.max(ray_caster.data.pos_w).item():.2f}"
         # ):
         
-        if step_count % 100 == 0:
-            with Timer("Ray-caster update"):
-                ray_caster.update(dt=sim.get_physics_dt(), force_recompute=True)
-        else:
-            ray_caster.update(dt=sim.get_physics_dt(), force_recompute=True)
+        ray_caster.update(dt=sim.get_physics_dt(), force_recompute=True)
 
         # print(f"Ray-caster: {ray_caster.data}")
 
