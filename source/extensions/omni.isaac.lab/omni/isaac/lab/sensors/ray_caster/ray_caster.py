@@ -22,7 +22,6 @@ from omni.isaac.lab.markers import VisualizationMarkers
 from omni.isaac.lab.terrains.trimesh.utils import make_plane
 from omni.isaac.lab.utils.math import convert_quat, quat_apply, quat_apply_yaw
 from omni.isaac.lab.utils.warp import convert_to_warp_mesh, raycast_mesh
-from omni.debugdraw import get_debug_draw_interface
 
 from pxr import Usd, UsdPhysics
 
@@ -79,8 +78,6 @@ class RayCaster(SensorBase):
         # the warp meshes used for raycasting.
         self.meshes: dict[str, list[wp.Mesh]] = {}
 
-        # TODO debug
-        self._debugDraw = get_debug_draw_interface()
 
     def __str__(self) -> str:
         """Returns: A string containing information about the instance."""
@@ -172,18 +169,6 @@ class RayCaster(SensorBase):
 
     def _get_mesh(self, mesh_prim) -> tuple[np.array, np.array]:
         return np.asarray(mesh_prim.GetPointsAttr().Get()), np.asarray(mesh_prim.GetFaceVertexIndicesAttr().Get())
-
-    def _draw_mesh(self, points, indices):
-        # TODO: only for debuging
-        color = 0xffffff00
-
-        for point in points:
-            self._debugDraw.draw_point(point, color)
-
-        for i in range(len(indices)-1):
-            point0 = points[indices[i]]
-            point1 = points[indices[i+1]]
-            self._debugDraw.draw_line(point0, color, point1, color)
 
     def _get_meshes(self, prim_path, usd_transform : bool = True, transform : Gf.Matrix4d = None) -> tuple[list[np.array], list[np.array], list[wp.Mesh]]:
         
@@ -320,8 +305,6 @@ class RayCaster(SensorBase):
                         transformed_points = np.asarray(transformed_points_list)
                         wp_mesh = convert_to_warp_mesh(transformed_points, indices, device=self.device)
                         self.meshes[prim_path][i] = wp_mesh
-
-                        self._draw_mesh(transformed_points, indices)
 
     def _initialize_rays_impl(self):
         # compute ray stars and directions
