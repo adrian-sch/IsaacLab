@@ -87,6 +87,86 @@ ARENA_CFG = RigidObjectCfg(
         init_state=RigidObjectCfg.InitialStateCfg(),
     )
 
+
+box_01_path = model_dir_path + "/rl_assets/Box_A02_60x40x28cm_PR_V_NVD_01.usd"
+box_02_path = model_dir_path + "/rl_assets/Box_A10_40x30x34cm_PR_V_NVD_01.usd"
+box_03_path = model_dir_path + "/rl_assets/PlywoodCrate_B03_200x100x100cm_PR_NV_01.usd"
+pallet_path = model_dir_path + "/rl_assets/Pallet_Asm_A02_91x91x51cm_PR_V_NVD_01.usd"
+drum_path = model_dir_path + "/rl_assets/SteelDrum_A01_PR_NVD_01.usd"
+shelf_path = model_dir_path + "/rl_assets/Simple_Shelf.usd"
+BOX_01_CFG = RigidObjectCfg(
+        prim_path="{ENV_REGEX_NS}/objects/box_01",
+        spawn=sim_utils.UsdFileCfg(
+            usd_path=box_01_path,
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(
+                kinematic_enabled=True,
+            ),
+            mass_props=sim_utils.MassPropertiesCfg(density=1.0),
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(),
+    )
+BOX_02_CFG = RigidObjectCfg(
+        prim_path="{ENV_REGEX_NS}/objects/box_02",
+        spawn=sim_utils.UsdFileCfg(
+            usd_path=box_02_path,
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(
+                kinematic_enabled=True,
+            ),
+            mass_props=sim_utils.MassPropertiesCfg(density=1.0),
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(),
+    )
+BOX_03_CFG = RigidObjectCfg(
+        prim_path="{ENV_REGEX_NS}/objects/box_03",
+        spawn=sim_utils.UsdFileCfg(
+            usd_path=box_03_path,
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(
+                kinematic_enabled=True,
+            ),
+            mass_props=sim_utils.MassPropertiesCfg(density=1.0),
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(),
+    )
+PALLET_CFG = RigidObjectCfg(
+        prim_path="{ENV_REGEX_NS}/objects/pallet",
+        spawn=sim_utils.UsdFileCfg(
+            usd_path=pallet_path,
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(
+                kinematic_enabled=True,
+            ),
+            mass_props=sim_utils.MassPropertiesCfg(density=1.0),
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(),
+    )
+DRUM_CFG = RigidObjectCfg(
+        prim_path="{ENV_REGEX_NS}/objects/pallet",
+        spawn=sim_utils.UsdFileCfg(
+            usd_path=drum_path,
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(
+                kinematic_enabled=True,
+            ),
+            mass_props=sim_utils.MassPropertiesCfg(density=1.0),
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(),
+    )
+SHELF_CFG = RigidObjectCfg(
+        prim_path="{ENV_REGEX_NS}/objects/shelf",
+        spawn=sim_utils.UsdFileCfg(
+            usd_path=shelf_path,
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(
+                kinematic_enabled=True,
+            ),
+            mass_props=sim_utils.MassPropertiesCfg(density=1.0),
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(),
+    )
+
 KLT_CFG = RigidObjectCfg(
         prim_path="{ENV_REGEX_NS}/objects/KLT_0",
         spawn=sim_utils.UsdFileCfg(
@@ -126,7 +206,7 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
     #     lookat=(0.0, 0.0, 0.0),
     #     resolution=(1920, 1080),
     # )
-
+    
     # env
     episode_length_s = 20.0
     decimation = 30 # 10 Hz
@@ -135,12 +215,12 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
     action_scale_y = 2.0
     action_scale_ang = 3.14
     
-    num_objects = 5
+    num_objects = 6
     
     action_space = 3
     observation_space = {
     "lidar": [3,2250], # TODO get lidar raycount from sensor config
-    "sensor": 2
+    "sensor": 3
     }
     state_space = 0 # only used for RNNs, defined to avoid warning
 
@@ -210,45 +290,41 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
         },
     )
 
+    shelf_cfg = SHELF_CFG.replace(prim_path="/World/envs/env_.*/Shelf")
+
     # walls
     arena: RigidObjectCfg = ARENA_CFG.replace(prim_path="/World/envs/env_.*/Arena")
 
     # objects
     objects_cfgs = []
-    object_prim_paths = [
-        # "/World/envs/env_.*/Arena",
-        # "/World/envs/env_.*/Arena/Simple_Collider_split",
-        # "/World/envs/env_.*/Arena/Simple_Collider_split/Cube_001_001",
+    lidar_prim_paths = [
+        "/World/envs/env_.*/Arena",
+        "/World/envs/env_.*/Shelf",
         ]
+    
+    # objects = [BOX_01_CFG, BOX_02_CFG, BOX_03_CFG, PALLET_CFG, DRUM_CFG]
+    objects = [BOX_01_CFG, BOX_01_CFG, BOX_02_CFG, DRUM_CFG, DRUM_CFG, PALLET_CFG]
     # Rigid Object
     for i in range(num_objects):
-        object_prim_path = f"/World/envs/env_.*/object_{i}"
-        objects_cfgs.append(CUBE_CFG.replace(prim_path=object_prim_path))
-        object_prim_paths.append(object_prim_path)
+        object_prim_path = f"/World/envs/env_.*/Object_{i}"
+        # cfg = random.choice(objects) # TODO better use torch? so seed is set?
+        cfg = objects[i%len(objects)]
+        objects_cfgs.append(cfg.replace(prim_path=object_prim_path))
+        lidar_prim_paths.append(object_prim_path)
     
     #lidar config
     lidar_scanner_cfg = RayCasterCfg(
         prim_path="/World/envs/env_.*/Robot/base_link",
-        mesh_prim_paths=["/World/ground"] + object_prim_paths,
+        mesh_prim_paths=lidar_prim_paths,
         pattern_cfg=patterns.LidarPatternCfg(channels=1, vertical_fov_range=(0.0, 0.0), horizontal_fov_range=(-135.0, 135.0), horizontal_res=0.12),
         offset=OffsetCfg(pos=(0.1, 0.0, 0.083)),
         attach_yaw_only=True,
-        debug_vis=True, # TODO flag for when video is recorded
+        debug_vis=False, # TODO flag for when video is recorded
         max_distance=5.0
     )
 
     # TODO reward sclaes
     # reward scales
-    # lin_vel_reward_scale = 1.0
-    # yaw_rate_reward_scale = 0.5
-    # z_vel_reward_scale = -2.0
-    # ang_vel_reward_scale = -0.05
-    # joint_torque_reward_scale = -2.5e-5
-    # joint_accel_reward_scale = -2.5e-7
-    # action_rate_reward_scale = -0.01
-    # feet_air_time_reward_scale = 0.5
-    # undersired_contact_reward_scale = -1.0
-    # flat_orientation_reward_scale = -5.0
 
 
 class RobomasterEnv(DirectRLEnv):
@@ -287,23 +363,16 @@ class RobomasterEnv(DirectRLEnv):
         # TODO debug
         self._cur_step = 0
 
-        # TODO logging
         # Logging
-        # self._episode_sums = {
-        #     key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
-        #     for key in [
-        #         "track_lin_vel_xy_exp",
-        #         "track_ang_vel_z_exp",
-        #         "lin_vel_z_l2",
-        #         "ang_vel_xy_l2",
-        #         "dof_torques_l2",
-        #         "dof_acc_l2",
-        #         "action_rate_l2",
-        #         "feet_air_time",
-        #         "undesired_contacts",
-        #         "flat_orientation_l2",
-        #     ]
-        # }
+        self._episode_sums = {
+            key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
+            for key in [
+                "delta_goal_dist_lin",
+                "object_dist_penalty",
+                "finished",
+                "crash",
+            ]
+        }
 
     def _setup_scene(self):
         self._robot = Articulation(self.cfg.robot)
@@ -320,6 +389,7 @@ class RobomasterEnv(DirectRLEnv):
             self.scene.rigid_objects[f"object_{i}"] = object
 
         self._goal_viz = VisualizationMarkers(self.cfg.goal_marker_cfg)
+        self._shelf = RigidObject(self.cfg.shelf_cfg)
 
         self._lidar_scanner = RayCaster(self.cfg.lidar_scanner_cfg)
         self.scene.sensors["lidar_scanner"] = self._lidar_scanner
@@ -364,9 +434,6 @@ class RobomasterEnv(DirectRLEnv):
         rel_goal_pos_rot = torch.zeros(self.num_envs, 2, device=self.device)
         rel_goal_pos_rot[:, 0] = rel_goal_pos[:, 0] * torch.cos(-robo_yaw.squeeze()) - rel_goal_pos[:, 1] * torch.sin(-robo_yaw.squeeze())
         rel_goal_pos_rot[:, 1] = rel_goal_pos[:, 0] * torch.sin(-robo_yaw.squeeze()) + rel_goal_pos[:, 1] * torch.cos(-robo_yaw.squeeze())
-   
-        # Normalize relative goal position
-        rel_goal_pos_rot = rel_goal_pos_rot / self.cfg.env_spacing
 
         # normalize lidar data
         lidar_data = self._lidar_scanner.data.ray_distances / self.cfg.lidar_scanner_cfg.max_distance
@@ -388,19 +455,19 @@ class RobomasterEnv(DirectRLEnv):
         obs = {
             "lidar": self._lidar_buf,
             "sensor":             
-                # TODO check this again, sould also work with just the rel_goal_pos_rot
-                rel_goal_pos_rot,
-                # torch.cat(
-                #     [
-                #         tensor
-                #         for tensor in (
-                #             rel_goal_pos_rot,
-                #             self._dist_to_goal.unsqueeze(1),
-                #         )
-                #         if tensor is not None
-                #     ],
-                #     dim=-1,
-                # ),
+                # TODO check this again, should also work with just the rel_goal_pos_rot ?
+                # rel_goal_pos_rot,
+                torch.cat(
+                    [
+                        tensor
+                        for tensor in (
+                            rel_goal_pos_rot,
+                            self._dist_to_goal.unsqueeze(1),
+                        )
+                        if tensor is not None
+                    ],
+                    dim=-1,
+                ),
         }
 
         observations = {"policy": obs}
@@ -410,24 +477,41 @@ class RobomasterEnv(DirectRLEnv):
 
         if self._dist_to_goal_buf is None:
             self._dist_to_goal_buf = self._dist_to_goal
-        reward = (self._dist_to_goal_buf - self._dist_to_goal)
+        delta_goal_dist_lin = (self._dist_to_goal_buf - self._dist_to_goal)
         
         # reward += (5.0 - dist_to_goal) * 1.0
         self._dist_to_goal_buf = self._dist_to_goal
-        
-        # TODO is this needed => if kept maybe an ablation study can be done?
-        # penalty for change in action for smoother actions
-        # reward += (self._previous_actions - self._actions).pow(2).sum(dim=1) * -0.005
-        # self._previous_actions = self._actions.clone()
 
-        # TODO probably we need this? Or can we do this with the lidar? Or maybe even a collision sensor? But positions would be better for reward shaping.
         # penalty for distance to objects
-        reward += -1/(self._dist_to_objecs ** 2).sum(dim=-1) * 0.5
+        # reward += -1/(self._dist_to_objecs ** 2).sum(dim=-1) * 0.5
+        # object_dist_penalty = -1/(torch.min(self._lidar_scanner.data.ray_distances, dim= -1).values ** 2) * 0.5
         # reward += torch.where(torch.any(self._dist_to_objecs < 1.5, dim = -1), torch.min(self._dist_to_objects, dim = -1)[0] - 2.0, 0)
+        object_dist_penalty = torch.where(torch.min(self._lidar_scanner.data.ray_distances, dim= -1).values < 1.5, 
+                                          (torch.min(self._lidar_scanner.data.ray_distances, dim= -1).values - 1.5)/1.5,
+                                          0)
+
+        finished = torch.where(self._dist_to_goal < self.cfg.fin_dist, 1, 0)
         
-        reward = torch.where(self._dist_to_goal < self.cfg.fin_dist, 10, reward)
-        reward = torch.where(torch.any(self._dist_to_objecs < 0.75, dim = -1), -10, reward) # TODO check this with an contact sensor
-        
+        # contacts
+        is_contact = (
+            torch.max(torch.norm(self._contact_sensor.data.net_forces_w, dim=-1), dim=1)[0] > 0.0
+        )
+        crash = torch.where(is_contact, 1, 0) # TODO check this with an contact sensor
+
+        # TODO look into anymal example for scaling and step_dt
+        rewards = {
+            "delta_goal_dist_lin": delta_goal_dist_lin * 10.0,
+            "object_dist_penalty": object_dist_penalty * 0.5,
+            "finished": finished * 10.0,
+            "crash": crash * -10.0,
+        }
+        reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
+        # Logging
+        for key, value in rewards.items():
+            self._episode_sums[key] += value
+            # print(f"Reward {key}: {value}")
+            # print(f"Reward sum {key}: {self._episode_sums[key]}")
+
         return reward
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
@@ -435,25 +519,26 @@ class RobomasterEnv(DirectRLEnv):
 
         ones = torch.ones_like(time_out)
         died = torch.zeros_like(time_out)
-
-        # check distance to goal
-        died = torch.where(self._dist_to_goal > self.cfg.env_spacing , ones, died)
         
         # TODO check this with a contact sensor
         # check distance to objects
-        died = torch.where(torch.any(self._dist_to_objecs < 0.75, dim=-1), ones, died)
+        # died = torch.where(torch.any(self._dist_to_objecs < 0.75, dim=-1), ones, died)
+        # check distance with lidar, cant do this because of shelf
+        # died = torch.where(torch.min(self._lidar_scanner.data.ray_distances, dim= -1).values < self.cfg.fin_dist, ones, died)
+
+        # contacts
+        is_contact = (
+            torch.max(torch.norm(self._contact_sensor.data.net_forces_w, dim=-1), dim=1)[0] > 0.0
+        )
+        died = torch.where(is_contact, ones, died)
+
 
         # check if robot reached goal
-        died = torch.where(self._dist_to_goal < self.cfg.fin_dist, ones, died)
-
-        # Check if any z-coordinate is greater than 0.2
-        # indices = torch.nonzero(self._robot.data.root_pos_w[:, 2] > 0.2).squeeze()
-        # if indices.any():
-        #     # Get the indices where z > 0.2
-        #     print(f"[ROBO WARNING] Indices where z > 0.2: {indices.tolist()} @ step: {self._cur_step}")
-        #     max_z_above_0_2 = self._robot.data.root_pos_w[indices, 2].max()
-        #     print(f"[ROBO WARNING] Max z: {max_z_above_0_2.item()}")
+        reached_goal = self._dist_to_goal < self.cfg.fin_dist
+        died = torch.where(reached_goal, ones, died)
             
+        # reset flying robots
+        # TODO optinal? check if robo is flipped
         died = torch.where(self._robot.data.root_pos_w[:, 2] > 0.2, ones, died)
 
         return died, time_out
@@ -485,7 +570,7 @@ class RobomasterEnv(DirectRLEnv):
         for object in self._objects:
             object_pose = torch.zeros(num_resets, 7, device=self.device)
             # object_pose[:, :3] = sample_circle((self.cfg.env_spacing * 0.75) / 2, ((self.cfg.env_spacing * 0.75) / 2) - 1.5, size=object_pose[:, :3].size(), z=0.1, device=self.device)
-            object_pose[:, :3] = sample_circle((self.cfg.env_spacing * 0.75) / 2, 1.0, size=object_pose[:, :3].size(), z=0.1, device=self.device)
+            object_pose[:, :3] = sample_circle((self.cfg.env_spacing * 0.75) / 2, 1.0, size=object_pose[:, :3].size(), z=0.0, device=self.device)
             object_pose[:, :3] += env_positions
             object_pose[:, 3:] = sample_yaw(num_resets, device=self.device)
 
@@ -518,23 +603,27 @@ class RobomasterEnv(DirectRLEnv):
 
         # goal_pos = sample_circle(((self.cfg.env_spacing * 0.75) / 2) - 1.5 , 1.0, size=goal_pos.size(), z=0.1, device=self.device)
         self.goal_pos[env_ids] = goal_pos[env_ids]
-        self._goal_viz.visualize(self.goal_pos)
+        # self._goal_viz.visualize(self.goal_pos)
+
+        goal_pose = torch.zeros(num_resets, 7, device=self.device)
+        goal_pose[:, :3] = self.goal_pos[env_ids]
+        goal_pose[:, 3:] = sample_yaw(num_resets, device=self.device) # TODO do we need this somewhere else?
+        self._shelf.write_root_pose_to_sim(goal_pose, env_ids)
 
         super()._reset_idx(env_ids)
         
-        # TODO logging
-        # # Logging
-        # extras = dict()
-        # for key in self._episode_sums.keys():
-        #     episodic_sum_avg = torch.mean(self._episode_sums[key][env_ids])
-        #     extras["Episode Reward/" + key] = episodic_sum_avg / self.max_episode_length_s
-        #     self._episode_sums[key][env_ids] = 0.0
-        # self.extras["log"] = dict()
-        # self.extras["log"].update(extras)
-        # extras = dict()
-        # extras["Episode Termination/base_contact"] = torch.count_nonzero(self.reset_terminated[env_ids]).item()
-        # extras["Episode Termination/time_out"] = torch.count_nonzero(self.reset_time_outs[env_ids]).item()
-        # self.extras["log"].update(extras)
+        # Logging
+        extras = dict()
+        for key in self._episode_sums.keys():
+            episodic_sum_avg = torch.mean(self._episode_sums[key][env_ids])
+            extras["Episode_Reward/" + key] = episodic_sum_avg / self.max_episode_length_s
+            self._episode_sums[key][env_ids] = 0.0
+        self.extras["log"] = dict()
+        self.extras["log"].update(extras)
+        extras = dict()
+        extras["Episode_Termination/fin_or_crash"] = torch.count_nonzero(self.reset_terminated[env_ids]).item()
+        extras["Episode_Termination/time_out"] = torch.count_nonzero(self.reset_time_outs[env_ids]).item()
+        self.extras["log"].update(extras)
 
 def sample_circle(max_radius, min_radius, size = torch.Size([1,3]), z = 0.0, device = None):
     # sample uniformly from a circle with a maximum radius of max_radius with a height of z from a circle aligned with the z-axis 
