@@ -8,6 +8,7 @@ from __future__ import annotations
 import torch
 import math
 import os
+import random
 
 import omni.isaac.lab.sim as sim_utils
 from omni.isaac.lab.assets import Articulation, ArticulationCfg
@@ -52,6 +53,7 @@ ROBOMASTER_CFG = ArticulationCfg(
             sleep_threshold=0.005,
             stabilization_threshold=0.001,
         ),
+        activate_contact_sensors=True,
         copy_from_source=False,
     ),
     init_state=ArticulationCfg.InitialStateCfg(
@@ -323,6 +325,14 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
         max_distance=5.0
     )
 
+    # contact sensor config
+    # TODO check update_period, history_length, filter needed?
+    contact_sensor: ContactSensorCfg = ContactSensorCfg(
+        prim_path="/World/envs/env_.*/Robot/base_link",
+        # filter_prim_paths_expr=["/World/envs/env_.*/Object_.*", "/World/envs/env_.*/Shelf", "/World/envs/env_.*/Arena"],
+        debug_vis=False, # TODO flag for when video is recorded
+    )
+
     # TODO reward sclaes
     # reward scales
 
@@ -393,6 +403,9 @@ class RobomasterEnv(DirectRLEnv):
 
         self._lidar_scanner = RayCaster(self.cfg.lidar_scanner_cfg)
         self.scene.sensors["lidar_scanner"] = self._lidar_scanner
+
+        self._contact_sensor = ContactSensor(self.cfg.contact_sensor)
+        self.scene.sensors["contact_sensor"] = self._contact_sensor
 
         self.cfg.terrain.num_envs = self.scene.cfg.num_envs
         self.cfg.terrain.env_spacing = self.scene.cfg.env_spacing
