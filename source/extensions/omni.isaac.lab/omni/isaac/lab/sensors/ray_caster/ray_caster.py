@@ -78,7 +78,6 @@ class RayCaster(SensorBase):
         # the warp meshes used for raycasting.
         self.meshes: dict[str, list[wp.Mesh]] = {}
 
-
     def __str__(self) -> str:
         """Returns: A string containing information about the instance."""
         return (
@@ -170,7 +169,7 @@ class RayCaster(SensorBase):
     def _get_mesh(self, mesh_prim) -> tuple[np.array, np.array]:
         return np.asarray(mesh_prim.GetPointsAttr().Get()), np.asarray(mesh_prim.GetFaceVertexIndicesAttr().Get())
 
-    def _get_meshes(self, prim_path, usd_transform : bool = True, transform : Gf.Matrix4d = None) -> tuple[list[np.array], list[np.array], list[wp.Mesh]]:
+    def _get_meshes(self, prim_path, only_usd_transform : bool = True, transform : Gf.Matrix4d = None) -> tuple[list[np.array], list[np.array], list[wp.Mesh]]:
         
         mesh_prims = sim_utils.get_all_matching_child_prims(
             prim_path, lambda prim: prim.HasAPI(UsdPhysics.CollisionAPI)
@@ -188,11 +187,12 @@ class RayCaster(SensorBase):
             mesh_prim = UsdGeom.Mesh(mesh_prim)
             points, indices = self._get_mesh(mesh_prim)
 
-            if usd_transform:
-                # Transform mesh into world frame
-                transform : Gf.Matrix4d = mesh_prim.ComputeLocalToWorldTransform(Usd.TimeCode.Default())
+            usd_transform : Gf.Matrix4d = mesh_prim.ComputeLocalToWorldTransform(Usd.TimeCode.Default())
 
-            transformed_points = self._transform_points(points, transform)
+            if only_usd_transform:
+                transformed_points = self._transform_points(points, usd_transform)
+            else:
+                transformed_points = self._transform_points(points, transform)
 
             wp_mesh = convert_to_warp_mesh(transformed_points, indices, device=self.device)
 
@@ -242,7 +242,7 @@ class RayCaster(SensorBase):
                      self._origin_indices[prim_path], 
                      self.meshes[prim_path]
                      ) = self._get_meshes(prim_path, 
-                                          usd_transform=False, 
+                                          only_usd_transform=False, 
                                           transform=transform)
                 continue
 
@@ -260,8 +260,8 @@ class RayCaster(SensorBase):
                 (self._origin_points[mesh_prim_path], 
                  self._origin_indices[mesh_prim_path], 
                  self.meshes[mesh_prim_path]
-                 ) = self._get_meshes(mesh_prim_path, 
-                                      usd_transform=True)
+                 ) = self._get_meshes(mesh_prim_path,                                       
+                                      only_usd_transform=True)
 
             else:
                 # create an infinite plane mesh
@@ -271,12 +271,12 @@ class RayCaster(SensorBase):
                 omni.log.info(f"Created infinite plane mesh prim: {mesh_prim.GetPath()}.")
                 # add the warp mesh to the list
                 self.meshes[mesh_prim_path] = [wp_mesh]
-
+        # TODO this check does not work if only view meshes are used, for now ignored
         # throw an error if no meshes are found
-        if all([mesh_prim_path not in self.meshes for mesh_prim_path in self.cfg.mesh_prim_paths]):
-            raise RuntimeError(
-                f"No meshes found for ray-casting! Please check the mesh prim paths: {self.cfg.mesh_prim_paths}"
-            )
+        # if all([mesh_prim_path not in self.meshes for mesh_prim_path in self.cfg.mesh_prim_paths]):
+        #     raise RuntimeError(
+        #         f"No meshes found for ray-casting! Please check the mesh prim paths: {self.cfg.mesh_prim_paths}"
+        #     )
         
     def _update_warp_meshes(self, env_ids: Sequence[int] | None = None):
         # TODO also update all "non view" meshes 
@@ -365,7 +365,7 @@ class RayCaster(SensorBase):
 
         # init ray_distances with max_distance
         ray_distances = torch.full((len(env_ids), self.num_rays), self.cfg.max_distance, device=self._device)
-        
+
         # for mesh in self.meshes:
         for mesh_prim in self.meshes:
             for mesh in self.meshes[mesh_prim]:
