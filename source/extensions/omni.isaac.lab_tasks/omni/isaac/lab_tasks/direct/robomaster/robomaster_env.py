@@ -44,6 +44,7 @@ class RobomasterEnv(DirectRLEnv):
         self._dist_to_goal_buf = torch.zeros(self.num_envs, device=self.device)
         self._dist_to_objects = torch.zeros(self.num_envs, self.cfg.num_objects, device=self.device)
         self._lidar_buf = torch.zeros(self.num_envs, *tuple(self.cfg.observation_space['lidar']), device=self.device)
+        self._is_contact = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
 
         # Get specific body indices
         self._joint_ids, _ = self._robot.find_joints(["base_lf", "base_rf", "base_lb", "base_rb"])
@@ -62,11 +63,29 @@ class RobomasterEnv(DirectRLEnv):
             key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
             for key in [
                 "delta_goal_dist_lin",
-                "object_dist_penalty",
+                "object_dist_penalty_exp",
+                # "object_dist_penalty_lin",
                 "finished",
-                "crash",
+                "contacts",
             ]
         }
+        self._finished = 0
+        self._contact = 0
+
+        # # Initialize the plot
+        # plt.ion()  # Turn on interactive mode
+        # self.fig, self.ax = plt.subplots()
+        # self.target_vel_line, = self.ax.plot([], [], 'r-', label='Target Velocities')
+        # self.joint_vel_line, = self.ax.plot([], [], 'b-', label='Joint Velocities')
+        # self.ax.legend()
+        # self.ax.set_xlim(0, 100)  # Adjust as needed
+        # self.ax.set_ylim(-100, 100)  # Adjust as needed
+        # self.target_vel_data = []
+        # self.joint_vel_data = []
+        # self.time_data = []
+        # plt.show(block=False)  # Show the plot window without blocking the code execution
+
+
 
     def _setup_scene(self):
         self._robot = Articulation(self.cfg.robot)
@@ -115,6 +134,30 @@ class RobomasterEnv(DirectRLEnv):
 
     def _apply_action(self):
         self._robot.set_joint_velocity_target(self._processed_actions, joint_ids = self._joint_ids)
+        # print("Actions: ", self._processed_actions[0])
+        # print("joint_vels: ", self._robot.data.joint_vel[0, self._joint_ids])
+        # print("target_vels: ", self._robot.data.joint_vel_target[0, self._joint_ids])
+
+        # # Update the plot data
+        # self.time_data.append(len(self.time_data))
+        # self.target_vel_data.append(self._robot.data.joint_vel_target[0, self._joint_ids].cpu().numpy())
+        # self.joint_vel_data.append(self._robot.data.joint_vel[0, self._joint_ids].cpu().numpy())
+
+        # # Update the plot
+        # self.target_vel_line.set_xdata(self.time_data)
+        # self.target_vel_line.set_ydata([vel[0] for vel in self.target_vel_data])
+        # self.joint_vel_line.set_xdata(self.time_data)
+        # self.joint_vel_line.set_ydata([vel[0] for vel in self.joint_vel_data])
+
+
+        # # Adjust x-axis limits to scroll
+        # if len(self.time_data) > 100:  # Adjust the window size as needed
+        #     self.ax.set_xlim(self.time_data[-100], self.time_data[-1])
+
+        # self.ax.relim()
+        # self.ax.autoscale_view()
+        # self.fig.canvas.draw()
+        # self.fig.canvas.flush_events()
 
     def _get_observations(self) -> dict:
         quad = self._robot.data.root_quat_w
@@ -181,26 +224,29 @@ class RobomasterEnv(DirectRLEnv):
 
         # penalty for distance to objects
         # reward += -1/(self._dist_to_objecs ** 2).sum(dim=-1) * 0.5
-        # object_dist_penalty = -1/(torch.min(self._lidar_scanner.data.ray_distances, dim= -1).values ** 2) * 0.5
         # reward += torch.where(torch.any(self._dist_to_objecs < 1.5, dim = -1), torch.min(self._dist_to_objects, dim = -1)[0] - 2.0, 0)
-        object_dist_penalty = torch.where(torch.min(self._lidar_scanner.data.ray_distances, dim= -1).values < 1.5, 
+        
+        # penalty for distance to objects based on lidar
+        object_dist_penalty_exp = -1/(torch.min(self._lidar_scanner.data.ray_distances, dim= -1).values ** 3)
+        object_dist_penalty_lin = torch.where(torch.min(self._lidar_scanner.data.ray_distances, dim= -1).values < 1.5, 
                                           (torch.min(self._lidar_scanner.data.ray_distances, dim= -1).values - 1.5)/1.5,
                                           0)
 
+        # finieshed
         finished = torch.where(self._dist_to_goal < self.cfg.fin_dist, 1, 0)
         
-        # contacts
-        is_contact = (
+        # check for contacts
+        self._is_contact = (
             torch.max(torch.norm(self._contact_sensor.data.net_forces_w, dim=-1), dim=1)[0] > 0.0
         )
-        crash = torch.where(is_contact, 1, 0) # TODO check this with an contact sensor
 
         # TODO look into anymal example for scaling and step_dt
         rewards = {
-            "delta_goal_dist_lin": delta_goal_dist_lin * 10.0,
-            "object_dist_penalty": object_dist_penalty * 0.5,
-            "finished": finished * 10.0,
-            "crash": crash * -10.0,
+            "delta_goal_dist_lin": delta_goal_dist_lin * 50.0,
+            "object_dist_penalty_exp": object_dist_penalty_exp,
+            # "object_dist_penalty_lin": object_dist_penalty_lin,
+            "finished": finished * 10000.0,
+            "contacts": self._is_contact * -1000.0,
         }
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
         # Logging
@@ -224,16 +270,18 @@ class RobomasterEnv(DirectRLEnv):
         # died = torch.where(torch.min(self._lidar_scanner.data.ray_distances, dim= -1).values < self.cfg.fin_dist, ones, died)
 
         # contacts
-        is_contact = (
-            torch.max(torch.norm(self._contact_sensor.data.net_forces_w, dim=-1), dim=1)[0] > 0.0
-        )
-        died = torch.where(is_contact, ones, died)
-
+        died = torch.where(self._is_contact, ones, died)
+        self._contact = torch.sum(self._is_contact)
 
         # check if robot reached goal
         reached_goal = self._dist_to_goal < self.cfg.fin_dist
+        self._finished = torch.sum(reached_goal)
         died = torch.where(reached_goal, ones, died)
-            
+        
+        if torch.any(died):
+            print(f"Contacts in current Step: {self._contact}")
+            print(f"Finished in current Step: {self._finished}")
+
         # reset flying robots
         # TODO optinal? check if robo is flipped
         died = torch.where(self._robot.data.root_pos_w[:, 2] > 0.2, ones, died)
@@ -298,10 +346,11 @@ class RobomasterEnv(DirectRLEnv):
             ids = env_ids[ids]
             close = len(ids) > 0
 
-        # goal_pos = sample_circle(((self.cfg.env_spacing * 0.75) / 2) - 1.5 , 1.0, size=goal_pos.size(), z=0.1, device=self.device)
+        # place goal visualization
         self.goal_pos[env_ids] = goal_pos[env_ids]
-        # self._goal_viz.visualize(self.goal_pos)
+        self._goal_viz.visualize(self.goal_pos)
 
+        # place shelf
         goal_pose = torch.zeros(num_resets, 7, device=self.device)
         goal_pose[:, :3] = self.goal_pos[env_ids]
         goal_pose[:, 3:] = sample_yaw(num_resets, device=self.device) # TODO do we need this somewhere else?
@@ -318,7 +367,9 @@ class RobomasterEnv(DirectRLEnv):
         self.extras["log"] = dict()
         self.extras["log"].update(extras)
         extras = dict()
-        extras["Episode_Termination/fin_or_crash"] = torch.count_nonzero(self.reset_terminated[env_ids]).item()
+        # extras["Episode_Termination/fin_or_crash"] = torch.count_nonzero(self.reset_terminated[env_ids]).item()
+        extras["Episode_Termination/finished"] = self._finished
+        extras["Episode_Termination/contacts"] = self._contact
         extras["Episode_Termination/time_out"] = torch.count_nonzero(self.reset_time_outs[env_ids]).item()
         self.extras["log"].update(extras)
 

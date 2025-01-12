@@ -21,3 +21,5 @@ source ./_isaac_sim/setup_python_env.sh
 /usr/bin/env /workspace/isaaclab/_isaac_sim/kit/python/bin/python3 /workspace/isaaclab/source/standalone/environments/random_agent.py --task Isaac-Robomaster-Direct-v0 --num_envs 10 --livestream 1
 /workspace/isaaclab/_isaac_sim/kit/python/bin/python3 /workspace/isaaclab/source/standalone/environments/random_agent.py --task Isaac-Robomaster-Direct-v0 --num_envs 10 --livestream 1
 ./isaaclab.sh -p source/standalone/environments/random_agent.py --task Isaac-Robomaster-Direct-v0 --num_envs 2 --livestream 1
+./isaaclab.sh -p source/standalone/workflows/rl_games/play.py --task Isaac-Robomaster-Direct-v0 --num_envs 10 --livestream 1
+exit
