@@ -74,11 +74,6 @@ ARENA_CFG = RigidObjectCfg(
 
 
 box_01_path = model_dir_path + "/rl_assets/Box_A02_60x40x28cm_PR_V_NVD_01.usd"
-box_02_path = model_dir_path + "/rl_assets/Box_A10_40x30x34cm_PR_V_NVD_01.usd"
-box_03_path = model_dir_path + "/rl_assets/PlywoodCrate_B03_200x100x100cm_PR_NV_01.usd"
-pallet_path = model_dir_path + "/rl_assets/Pallet_Asm_A02_91x91x51cm_PR_V_NVD_01.usd"
-drum_path = model_dir_path + "/rl_assets/SteelDrum_A01_PR_NVD_01.usd"
-shelf_path = model_dir_path + "/rl_assets/Simple_Shelf.usd"
 BOX_01_CFG = RigidObjectCfg(
         prim_path="{ENV_REGEX_NS}/objects/box_01",
         spawn=sim_utils.UsdFileCfg(
@@ -91,6 +86,7 @@ BOX_01_CFG = RigidObjectCfg(
         ),
         init_state=RigidObjectCfg.InitialStateCfg(),
     )
+box_02_path = model_dir_path + "/rl_assets/Box_A10_40x30x34cm_PR_V_NVD_01.usd"
 BOX_02_CFG = RigidObjectCfg(
         prim_path="{ENV_REGEX_NS}/objects/box_02",
         spawn=sim_utils.UsdFileCfg(
@@ -103,6 +99,7 @@ BOX_02_CFG = RigidObjectCfg(
         ),
         init_state=RigidObjectCfg.InitialStateCfg(),
     )
+box_03_path = model_dir_path + "/rl_assets/PlywoodCrate_B03_200x100x100cm_PR_NV_01.usd"
 BOX_03_CFG = RigidObjectCfg(
         prim_path="{ENV_REGEX_NS}/objects/box_03",
         spawn=sim_utils.UsdFileCfg(
@@ -115,6 +112,7 @@ BOX_03_CFG = RigidObjectCfg(
         ),
         init_state=RigidObjectCfg.InitialStateCfg(),
     )
+pallet_path = model_dir_path + "/rl_assets/Pallet_Asm_A02_91x91x51cm_PR_V_NVD_01.usd"
 PALLET_CFG = RigidObjectCfg(
         prim_path="{ENV_REGEX_NS}/objects/pallet",
         spawn=sim_utils.UsdFileCfg(
@@ -127,6 +125,7 @@ PALLET_CFG = RigidObjectCfg(
         ),
         init_state=RigidObjectCfg.InitialStateCfg(),
     )
+drum_path = model_dir_path + "/rl_assets/SteelDrum_A01_PR_NVD_01.usd"
 DRUM_CFG = RigidObjectCfg(
         prim_path="{ENV_REGEX_NS}/objects/pallet",
         spawn=sim_utils.UsdFileCfg(
@@ -139,10 +138,24 @@ DRUM_CFG = RigidObjectCfg(
         ),
         init_state=RigidObjectCfg.InitialStateCfg(),
     )
+shelf_path = model_dir_path + "/rl_assets/Simple_Shelf.usd"
 SHELF_CFG = RigidObjectCfg(
         prim_path="{ENV_REGEX_NS}/objects/shelf",
         spawn=sim_utils.UsdFileCfg(
             usd_path=shelf_path,
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(
+                kinematic_enabled=True,
+            ),
+            mass_props=sim_utils.MassPropertiesCfg(density=1.0),
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(),
+    )
+shelf_leg_path = model_dir_path + "/rl_assets/square_shelf_leg_30mm.usd"
+SHELF_LEG_CFG = SHELF_CFG = RigidObjectCfg(
+        prim_path="{ENV_REGEX_NS}/objects/shelf/leg",
+        spawn=sim_utils.UsdFileCfg(
+            usd_path=shelf_leg_path,
             rigid_props=sim_utils.RigidBodyPropertiesCfg(
                 kinematic_enabled=True,
             ),
