@@ -10,14 +10,14 @@ from omni.isaac.lab.terrains import TerrainImporterCfg
 from omni.isaac.lab.markers import VisualizationMarkersCfg
 from omni.isaac.lab.utils import configclass
 
-from .robomaster_env_assets import ROBOMASTER_CFG, ARENA_CFG, BOX_01_CFG, BOX_02_CFG, BOX_03_CFG, PALLET_CFG, DRUM_CFG, SHELF_CFG
+from .robomaster_env_assets import ROBOMASTER_CFG, ARENA_CFG, BOX_01_CFG, BOX_02_CFG, BOX_03_CFG, PALLET_CFG, DRUM_CFG, SHELF_LEG_CFG
 
 @configclass
 class RobomasterEnvCfg(DirectRLEnvCfg):
 
     # TODO flag for when video is recorded
     viewer: ViewerCfg = ViewerCfg(
-        eye=(10.0, 10.0, 10.0),
+        eye=(0.0, 0.0, 50.0),
         lookat=(0.0, 0.0, 0.0),
         resolution=(1920, 1080),
     )
@@ -25,12 +25,16 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
     # env
     episode_length_s = 20.0
     decimation = 30 # 10 Hz
-    action_scale_x_pos = 3.5
+    action_scale_x_pos = 2.0
     action_scale_x_neg = 0.5
-    action_scale_y = 2.0
+    action_scale_y = 1.25
     action_scale_ang = 3.14
     
     num_objects = 6
+
+    shelf_width = 0.6
+    shelf_length = 0.25
+    shelf_scale = 1.0
     
     action_space = 3
     observation_space = {
@@ -64,14 +68,14 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
         ),
         # TODO flag for when video is recorded
         # TODO only for visualization, reduces performance
-        render=sim_utils.RenderCfg(
-            samples_per_pixel=2,
-            enable_ambient_occlusion=True,
-            dlss_mode=2,
-            enable_reflections=True,
-            enable_translucency=True,
-            enable_global_illumination=True,
-        )
+        # render=sim_utils.RenderCfg(
+        #     samples_per_pixel=2,
+        #     enable_ambient_occlusion=True,
+        #     dlss_mode=2,
+        #     enable_reflections=True,
+        #     enable_translucency=True,
+        #     enable_global_illumination=True,
+        # )
     )
     terrain = TerrainImporterCfg(
         prim_path="/World/ground",
@@ -94,18 +98,23 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
     robot: ArticulationCfg = ROBOMASTER_CFG.replace(prim_path="/World/envs/env_.*/Robot")
 
     # -- Goals
-    goal_marker_cfg = VisualizationMarkersCfg(
-        prim_path="/Visuals/goal_marker",
-        markers={
-            "cylinder": sim_utils.CylinderCfg(
-                radius=fin_dist,
-                height=0.2,
-                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
-            ),
-        },
-    )
+    # goal_marker_cfg = VisualizationMarkersCfg(
+    #     prim_path="/Visuals/goal_marker",
+    #     markers={
+    #         "cylinder": sim_utils.CylinderCfg(
+    #             radius=fin_dist,
+    #             height=0.2,
+    #             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
+    #         ),
+    #     },
+    # )
 
-    shelf_cfg = SHELF_CFG.replace(prim_path="/World/envs/env_.*/Shelf")
+    shelf_cfgs = {
+        "rf_leg": SHELF_LEG_CFG.replace(prim_path="/World/envs/env_.*/right_front_leg"),
+        "rb_leg": SHELF_LEG_CFG.replace(prim_path="/World/envs/env_.*/right_back_leg"),
+        "lf_leg": SHELF_LEG_CFG.replace(prim_path="/World/envs/env_.*/left_front_leg"),
+        "lb_leg": SHELF_LEG_CFG.replace(prim_path="/World/envs/env_.*/left_back_leg"),
+    }
 
     # walls
     arena: RigidObjectCfg = ARENA_CFG.replace(prim_path="/World/envs/env_.*/Arena")
@@ -114,7 +123,10 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
     objects_cfgs = []
     lidar_prim_paths = [
         "/World/envs/env_.*/Arena",
-        "/World/envs/env_.*/Shelf",
+        "/World/envs/env_.*/right_front_leg",
+        "/World/envs/env_.*/right_back_leg",
+        "/World/envs/env_.*/left_front_leg",
+        "/World/envs/env_.*/left_back_leg",
         ]
     
     # objects = [BOX_01_CFG, BOX_02_CFG, BOX_03_CFG, PALLET_CFG, DRUM_CFG]
@@ -134,7 +146,7 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
         pattern_cfg=patterns.LidarPatternCfg(channels=1, vertical_fov_range=(0.0, 0.0), horizontal_fov_range=(-135.0, 135.0), horizontal_res=0.12),
         offset=OffsetCfg(pos=(0.1, 0.0, 0.083)),
         attach_yaw_only=True,
-        debug_vis=True, # TODO flag for when video is recorded
+        debug_vis=False, # TODO flag for when video is recorded
         max_distance=5.0
     )
 
@@ -143,7 +155,7 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
     contact_sensor: ContactSensorCfg = ContactSensorCfg(
         prim_path="/World/envs/env_.*/Robot/base_link",
         # filter_prim_paths_expr=["/World/envs/env_.*/Object_.*", "/World/envs/env_.*/Shelf", "/World/envs/env_.*/Arena"],
-        debug_vis=True, # TODO flag for when video is recorded
+        debug_vis=False, # TODO flag for when video is recorded
     )
 
     # TODO reward sclaes

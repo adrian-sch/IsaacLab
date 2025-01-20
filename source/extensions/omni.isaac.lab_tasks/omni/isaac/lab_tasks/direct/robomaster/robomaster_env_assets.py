@@ -2,9 +2,8 @@
 import os
 
 import omni.isaac.lab.sim as sim_utils
-from omni.isaac.lab.assets import ArticulationCfg
+from omni.isaac.lab.assets import ArticulationCfg, RigidObjectCfg
 from omni.isaac.lab.actuators import ImplicitActuatorCfg
-from omni.isaac.lab.assets import RigidObjectCfg
 from omni.isaac.lab.utils.assets import ISAAC_NUCLEUS_DIR
 
 # TODO add Roboamster config        

@@ -8,16 +8,10 @@ from __future__ import annotations
 import torch
 import math
 
-# import matplotlib
-# matplotlib.use('Qt5Agg')  # You can also try 'Qt5Agg' or 'GTK3Agg'
-# import matplotlib.pyplot as plt
-
 import omni.isaac.lab.sim as sim_utils
-from omni.isaac.lab.assets import Articulation
+from omni.isaac.lab.assets import Articulation, RigidObject
 from omni.isaac.lab.envs import DirectRLEnv
 from omni.isaac.lab.sensors import ContactSensor, RayCaster
-from omni.isaac.lab.markers import VisualizationMarkers
-from omni.isaac.lab.assets import RigidObject
 
 from .robomaster_env_cfg import RobomasterEnvCfg
 
@@ -65,27 +59,13 @@ class RobomasterEnv(DirectRLEnv):
                 "delta_goal_dist_lin",
                 "object_dist_penalty_exp",
                 # "object_dist_penalty_lin",
+                "reached_goal",
                 "finished",
                 "contacts",
             ]
         }
         self._finished = 0
         self._contact = 0
-
-        # # Initialize the plot
-        # plt.ion()  # Turn on interactive mode
-        # self.fig, self.ax = plt.subplots()
-        # self.target_vel_line, = self.ax.plot([], [], 'r-', label='Target Velocities')
-        # self.joint_vel_line, = self.ax.plot([], [], 'b-', label='Joint Velocities')
-        # self.ax.legend()
-        # self.ax.set_xlim(0, 100)  # Adjust as needed
-        # self.ax.set_ylim(-100, 100)  # Adjust as needed
-        # self.target_vel_data = []
-        # self.joint_vel_data = []
-        # self.time_data = []
-        # plt.show(block=False)  # Show the plot window without blocking the code execution
-
-
 
     def _setup_scene(self):
         self._robot = Articulation(self.cfg.robot)
@@ -101,8 +81,12 @@ class RobomasterEnv(DirectRLEnv):
             self._objects.append(object)
             self.scene.rigid_objects[f"object_{i}"] = object
 
-        self._goal_viz = VisualizationMarkers(self.cfg.goal_marker_cfg)
-        self._shelf = RigidObject(self.cfg.shelf_cfg)
+        # self._goal_viz = VisualizationMarkers(self.cfg.goal_marker_cfg)
+        self._shelf = {}
+        for key, shelf_leg_cfg in self.cfg.shelf_cfgs.items():
+            shelf_leg = RigidObject(shelf_leg_cfg)
+            self._shelf[key] = shelf_leg
+            self.scene.rigid_objects[key] = shelf_leg
 
         self._lidar_scanner = RayCaster(self.cfg.lidar_scanner_cfg)
         self.scene.sensors["lidar_scanner"] = self._lidar_scanner
@@ -134,38 +118,9 @@ class RobomasterEnv(DirectRLEnv):
 
     def _apply_action(self):
         self._robot.set_joint_velocity_target(self._processed_actions, joint_ids = self._joint_ids)
-        # print("Actions: ", self._processed_actions[0])
-        # print("joint_vels: ", self._robot.data.joint_vel[0, self._joint_ids])
-        # print("target_vels: ", self._robot.data.joint_vel_target[0, self._joint_ids])
-
-        # # Update the plot data
-        # self.time_data.append(len(self.time_data))
-        # self.target_vel_data.append(self._robot.data.joint_vel_target[0, self._joint_ids].cpu().numpy())
-        # self.joint_vel_data.append(self._robot.data.joint_vel[0, self._joint_ids].cpu().numpy())
-
-        # # Update the plot
-        # self.target_vel_line.set_xdata(self.time_data)
-        # self.target_vel_line.set_ydata([vel[0] for vel in self.target_vel_data])
-        # self.joint_vel_line.set_xdata(self.time_data)
-        # self.joint_vel_line.set_ydata([vel[0] for vel in self.joint_vel_data])
-
-
-        # # Adjust x-axis limits to scroll
-        # if len(self.time_data) > 100:  # Adjust the window size as needed
-        #     self.ax.set_xlim(self.time_data[-100], self.time_data[-1])
-
-        # self.ax.relim()
-        # self.ax.autoscale_view()
-        # self.fig.canvas.draw()
-        # self.fig.canvas.flush_events()
 
     def _get_observations(self) -> dict:
-        quad = self._robot.data.root_quat_w
-        w = quad[:, 0]
-        x = quad[:, 1]
-        y = quad[:, 2]
-        z = quad[:, 3]        
-        robo_yaw = torch.atan2(2.0 * (x*y + w*z), w*w + x*x - y*y - z*z).unsqueeze(1)
+        robo_yaw = yaw_from_quad(self._robot.data.root_quat_w)
 
         self._dist_to_goal = torch.norm(self.goal_pos - self._robot.data.root_pos_w, dim=-1) 
 
@@ -233,7 +188,9 @@ class RobomasterEnv(DirectRLEnv):
                                           0)
 
         # finieshed
-        finished = torch.where(self._dist_to_goal < self.cfg.fin_dist, 1, 0)
+        reached_goal = torch.where(self._dist_to_goal < self.cfg.fin_dist, 1, 0)
+        velocity = torch.norm(self._robot.data.root_lin_vel_w, dim=-1)
+        finished = torch.where(torch.logical_and( reached_goal, velocity < 0.1) , 1, 0)
         
         # check for contacts
         self._is_contact = (
@@ -242,11 +199,12 @@ class RobomasterEnv(DirectRLEnv):
 
         # TODO look into anymal example for scaling and step_dt
         rewards = {
-            "delta_goal_dist_lin": delta_goal_dist_lin * 50.0,
-            "object_dist_penalty_exp": object_dist_penalty_exp,
-            # "object_dist_penalty_lin": object_dist_penalty_lin,
-            "finished": finished * 10000.0,
-            "contacts": self._is_contact * -1000.0,
+            "delta_goal_dist_lin": delta_goal_dist_lin * 10.0 * self.step_dt,
+            "object_dist_penalty_exp": object_dist_penalty_exp * 0.005 * self.step_dt,
+            # "object_dist_penalty_lin": object_dist_penalty_lin * self.step_dt,
+            "reached_goal": reached_goal * 1.0 * self.step_dt,
+            "finished": finished * 10.0 * self.step_dt,
+            "contacts": self._is_contact * -1.0 * self.step_dt,
         }
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
         # Logging
@@ -263,27 +221,26 @@ class RobomasterEnv(DirectRLEnv):
         ones = torch.ones_like(time_out)
         died = torch.zeros_like(time_out)
         
-        # TODO check this with a contact sensor
         # check distance to objects
         # died = torch.where(torch.any(self._dist_to_objecs < 0.75, dim=-1), ones, died)
         # check distance with lidar, cant do this because of shelf
         # died = torch.where(torch.min(self._lidar_scanner.data.ray_distances, dim= -1).values < self.cfg.fin_dist, ones, died)
 
+        # TODO maybe we can allow cantacts with small force?
         # contacts
         died = torch.where(self._is_contact, ones, died)
         self._contact = torch.sum(self._is_contact)
 
-        # check if robot reached goal
+        # check if robot reached goal and is standing still
         reached_goal = self._dist_to_goal < self.cfg.fin_dist
-        self._finished = torch.sum(reached_goal)
-        died = torch.where(reached_goal, ones, died)
-        
-        if torch.any(died):
-            print(f"Contacts in current Step: {self._contact}")
-            print(f"Finished in current Step: {self._finished}")
+        velocity = torch.norm(self._robot.data.root_lin_vel_w, dim=-1)
+        finished = torch.logical_and( reached_goal, velocity < 0.1)
+        self._finished = torch.sum(finished)
+        died = torch.where(finished, ones, died)
 
         # reset flying robots
-        # TODO optinal? check if robo is flipped
+        # TODO still needed with contact sensor?
+        # TODO optinal, check if robo is flipped
         died = torch.where(self._robot.data.root_pos_w[:, 2] > 0.2, ones, died)
 
         return died, time_out
@@ -346,15 +303,16 @@ class RobomasterEnv(DirectRLEnv):
             ids = env_ids[ids]
             close = len(ids) > 0
 
+        # TODO rename goal to shelf
         # place goal visualization
         self.goal_pos[env_ids] = goal_pos[env_ids]
-        self._goal_viz.visualize(self.goal_pos)
 
         # place shelf
         goal_pose = torch.zeros(num_resets, 7, device=self.device)
         goal_pose[:, :3] = self.goal_pos[env_ids]
         goal_pose[:, 3:] = sample_yaw(num_resets, device=self.device) # TODO do we need this somewhere else?
-        self._shelf.write_root_pose_to_sim(goal_pose, env_ids)
+        # self._shelf.write_root_pose_to_sim(goal_pose, env_ids)
+        self.place_shelf(env_ids, goal_pose)
 
         super()._reset_idx(env_ids)
         
@@ -372,6 +330,24 @@ class RobomasterEnv(DirectRLEnv):
         extras["Episode_Termination/contacts"] = self._contact
         extras["Episode_Termination/time_out"] = torch.count_nonzero(self.reset_time_outs[env_ids]).item()
         self.extras["log"].update(extras)
+
+    def place_shelf(self, env_ids, goal_pose: torch.Tensor):
+        legs_pos = {
+            "rf_leg": torch.tensor([self.cfg.shelf_length/2, -self.cfg.shelf_width/2], device=self.device),
+            "rb_leg": torch.tensor([-self.cfg.shelf_length/2, -self.cfg.shelf_width/2], device=self.device),
+            "lf_leg": torch.tensor([self.cfg.shelf_length/2, self.cfg.shelf_width/2], device=self.device),
+            "lb_leg": torch.tensor([-self.cfg.shelf_length/2, self.cfg.shelf_width/2], device=self.device),
+        }
+        
+        for key, leg_pos in legs_pos.items():
+            leg_pos = leg_pos * self.cfg.shelf_scale # TODO change scale while learning
+            leg_pos = rotate_vec_2d(leg_pos.unsqueeze(0), goal_pose[:, 3:]).squeeze()
+            
+            leg_pose = goal_pose.clone()
+            leg_pose[:, :2] += leg_pos
+            
+            self._shelf[key].write_root_pose_to_sim(leg_pose, env_ids)
+
 
 def sample_circle(max_radius, min_radius, size = torch.Size([1,3]), z = 0.0, device = None):
     # sample uniformly from a circle with a maximum radius of max_radius with a height of z from a circle aligned with the z-axis 
@@ -396,3 +372,23 @@ def sample_yaw(size, device = None):
     quat[:, 0] = torch.cos(yaw / 2)
     quat[:, 3] = torch.sin(yaw / 2)
     return quat
+
+def yaw_from_quad(quad):
+        w = quad[:, 0]
+        x = quad[:, 1]
+        y = quad[:, 2]
+        z = quad[:, 3]        
+        yaw = torch.atan2(2.0 * (x*y + w*z), w*w + x*x - y*y - z*z).unsqueeze(1)
+
+        return yaw
+    
+def rotate_vec_2d(vec, quad):
+    # rotate a vector around the z-axis
+    yaw = yaw_from_quad(quad)
+    
+    x = vec[:, 0]
+    y = vec[:, 1]
+    x_rot = x * torch.cos(yaw) - y * torch.sin(yaw)
+    y_rot = x * torch.sin(yaw) + y * torch.cos(yaw)
+
+    return torch.cat((x_rot.unsqueeze(1), y_rot.unsqueeze(1)), dim=-1)
