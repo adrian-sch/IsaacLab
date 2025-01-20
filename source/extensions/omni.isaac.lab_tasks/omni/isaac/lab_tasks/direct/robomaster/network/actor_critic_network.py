@@ -10,11 +10,8 @@ class ActorCriticNetwork(BaseNetwork):
     def __init__(self, params, **kwargs):
         BaseNetwork.__init__(self)
 
-
         output_shape = kwargs.pop('actions_num')
         input_shape = kwargs.pop('input_shape')
-
-
 
         self._separate = params.get("separate", False)
         self._fixed_sigma = params.get("fixed_sigma", True)
@@ -59,14 +56,17 @@ class ActorCriticNetwork(BaseNetwork):
         input_shape_mlp = output_shape_mlp_lidar + output_shape_mlp_sensor
 
         if "mlp" in params:
-            self._actor_mlp = self._build_mlp(input_size=input_shape_mlp, **params["mlp"])
+            # self._actor_mlp = self._build_mlp(input_size=input_shape_mlp, **params["mlp"])
+            self._actor_mlp = self._build_mlp(input_size=output_shape_mlp_lidar, **params["mlp"])
             if self._separate:
                 self._critic_mlp = self._build_mlp(input_size=input_shape_mlp, **params["mlp"])
 
-        output_shape_mlp = output_shape_calculate_from_model_flatten((input_shape_mlp,), self._actor_mlp)
+        # output_shape_mlp = output_shape_calculate_from_model_flatten((input_shape_mlp,), self._actor_mlp)
+        output_shape_a_mlp = output_shape_calculate_from_model_flatten((output_shape_mlp_lidar,), self._actor_mlp)
+        output_shape_c_mlp = output_shape_calculate_from_model_flatten((input_shape_mlp,), self._critic_mlp)
 
-        self._value = nn.Linear(in_features=output_shape_mlp, out_features=1)
-        self._mu = nn.Linear(in_features=output_shape_mlp, out_features=output_shape)
+        self._mu = nn.Linear(in_features=output_shape_a_mlp, out_features=output_shape)
+        self._value = nn.Linear(in_features=output_shape_c_mlp, out_features=1)
 
         if self._fixed_sigma:
             self._sigma = nn.Parameter(torch.zeros(output_shape, requires_grad=True, dtype=torch.float32), requires_grad=True)
@@ -95,7 +95,8 @@ class ActorCriticNetwork(BaseNetwork):
             a_sensor = self._actor_mlp_sensor(sensor)
             c_sensor = self._critic_mlp_sensor(sensor)
 
-            a_out = torch.cat([a_lidar, a_sensor], dim=1)
+            # a_out = torch.cat([a_lidar, a_sensor], dim=1)
+            a_out = a_lidar
             c_out = torch.cat([c_lidar, c_sensor], dim=1)
 
             a_out = self._actor_mlp(a_out)
