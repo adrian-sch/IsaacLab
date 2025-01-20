@@ -42,11 +42,13 @@ ROBOMASTER_CFG = ArticulationCfg(
     actuators={
         "base_link": ImplicitActuatorCfg(
             joint_names_expr=["base.*"],
-            stiffness=0.0,
-            damping=0.01,
+            # stiffnet and damping tuned with tuning guide: https://docs.omniverse.nvidia.com/isaacsim/latest/advanced_tutorials/tutorial_advanced_joint_tuning.html
+            stiffness=0.0, # needs to be 0 for velocity control
+            damping=0.5,
             # damping=1000.0, # dont know why this is here, maybe it has a reason
-            effort_limit=1.2,
-            velocity_limit=90.0,
+            # from datasheet https://www.dji.com/de/robomaster-ep/specs
+            effort_limit=0.25, # 0.25 Nm
+            velocity_limit=104.72, # 1000 rpm
         ),
     },
 )
@@ -55,7 +57,6 @@ ARENA_CFG = RigidObjectCfg(
         prim_path="{ENV_REGEX_NS}/Arena",
         spawn=sim_utils.UsdFileCfg(
             usd_path=arena_usd_path,
-            # usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/DexCube/dex_cube_instanceable.usd",
             rigid_props=sim_utils.RigidBodyPropertiesCfg(
                 kinematic_enabled=True,
                 disable_gravity=True,
