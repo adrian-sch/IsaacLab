@@ -21,7 +21,10 @@ ROBOMASTER_CFG = ArticulationCfg(
         usd_path=robomaster_usd_path,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,
+            solver_position_iteration_count=4,
+            solver_velocity_iteration_count=1,
             max_depenetration_velocity=1.0,
+            max_contact_impulse=0.1,
             enable_gyroscopic_forces=True,
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
@@ -29,7 +32,7 @@ ROBOMASTER_CFG = ArticulationCfg(
             # solver_position_iteration_count=8, # dont know from where i got this
             # solver_velocity_iteration_count=2, # dont know from where i got this
             solver_position_iteration_count=4, # from anymal example
-            solver_velocity_iteration_count=0,
+            solver_velocity_iteration_count=1,
             sleep_threshold=0.005,
             stabilization_threshold=0.001,
         ),
@@ -45,7 +48,6 @@ ROBOMASTER_CFG = ArticulationCfg(
             # stiffnet and damping tuned with tuning guide: https://docs.omniverse.nvidia.com/isaacsim/latest/advanced_tutorials/tutorial_advanced_joint_tuning.html
             stiffness=0.0, # needs to be 0 for velocity control
             damping=0.5,
-            # damping=1000.0, # dont know why this is here, maybe it has a reason
             # from datasheet https://www.dji.com/de/robomaster-ep/specs
             effort_limit=0.25, # 0.25 Nm
             velocity_limit=104.72, # 1000 rpm
@@ -86,6 +88,7 @@ BOX_01_CFG = RigidObjectCfg(
         ),
         init_state=RigidObjectCfg.InitialStateCfg(),
     )
+
 box_02_path = model_dir_path + "/rl_assets/Box_A10_40x30x34cm_PR_V_NVD_01.usd"
 BOX_02_CFG = RigidObjectCfg(
         prim_path="{ENV_REGEX_NS}/objects/box_02",
@@ -99,6 +102,7 @@ BOX_02_CFG = RigidObjectCfg(
         ),
         init_state=RigidObjectCfg.InitialStateCfg(),
     )
+
 box_03_path = model_dir_path + "/rl_assets/PlywoodCrate_B03_200x100x100cm_PR_NV_01.usd"
 BOX_03_CFG = RigidObjectCfg(
         prim_path="{ENV_REGEX_NS}/objects/box_03",
@@ -112,6 +116,7 @@ BOX_03_CFG = RigidObjectCfg(
         ),
         init_state=RigidObjectCfg.InitialStateCfg(),
     )
+
 pallet_path = model_dir_path + "/rl_assets/Pallet_Asm_A02_91x91x51cm_PR_V_NVD_01.usd"
 PALLET_CFG = RigidObjectCfg(
         prim_path="{ENV_REGEX_NS}/objects/pallet",
@@ -125,6 +130,7 @@ PALLET_CFG = RigidObjectCfg(
         ),
         init_state=RigidObjectCfg.InitialStateCfg(),
     )
+
 drum_path = model_dir_path + "/rl_assets/SteelDrum_A01_PR_NVD_01.usd"
 DRUM_CFG = RigidObjectCfg(
         prim_path="{ENV_REGEX_NS}/objects/pallet",
@@ -138,19 +144,7 @@ DRUM_CFG = RigidObjectCfg(
         ),
         init_state=RigidObjectCfg.InitialStateCfg(),
     )
-shelf_path = model_dir_path + "/rl_assets/Simple_Shelf.usd"
-SHELF_CFG = RigidObjectCfg(
-        prim_path="{ENV_REGEX_NS}/objects/shelf",
-        spawn=sim_utils.UsdFileCfg(
-            usd_path=shelf_path,
-            rigid_props=sim_utils.RigidBodyPropertiesCfg(
-                kinematic_enabled=True,
-            ),
-            mass_props=sim_utils.MassPropertiesCfg(density=1.0),
-            collision_props=sim_utils.CollisionPropertiesCfg(),
-        ),
-        init_state=RigidObjectCfg.InitialStateCfg(),
-    )
+
 shelf_leg_path = model_dir_path + "/rl_assets/square_shelf_leg_30mm.usd"
 SHELF_LEG_CFG = SHELF_CFG = RigidObjectCfg(
         prim_path="{ENV_REGEX_NS}/objects/shelf/leg",
@@ -168,9 +162,7 @@ SHELF_LEG_CFG = SHELF_CFG = RigidObjectCfg(
 KLT_CFG = RigidObjectCfg(
         prim_path="{ENV_REGEX_NS}/objects/KLT_0",
         spawn=sim_utils.UsdFileCfg(
-            # usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/KLT_Bin/small_KLT.usd",
             usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/block.usd",
-            # usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/DexCube/dex_cube_instanceable.usd",
             rigid_props=sim_utils.RigidBodyPropertiesCfg(
                 kinematic_enabled=True,
             ),
@@ -192,5 +184,4 @@ CUBE_CFG = RigidObjectCfg(
             ),
         ),
         init_state=RigidObjectCfg.InitialStateCfg(pos=(0.0, 1.0, 0.5), rot=(1.0, 0.0, 0.0, 0.0)),
-        # init_state=RigidObjectCfg.InitialStateCfg(),
     )
