@@ -17,36 +17,41 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
 
     # TODO flag for when video is recorded
     viewer: ViewerCfg = ViewerCfg(
-        eye=(0.0, 0.0, 50.0),
+        eye=(25.0, 25.0, 10.0),
         lookat=(0.0, 0.0, 0.0),
         resolution=(1920, 1080),
     )
     
     # env
     episode_length_s = 20.0
-    decimation = 30 # 10 Hz
+    dt = 1.0/120.0              # 120 Hz
+    decimation = int(1/(dt*10)) # 10 Hz
     action_scale_x_pos = 2.0
     action_scale_x_neg = 0.5
     action_scale_y = 1.25
     action_scale_ang = 3.14
     
-    num_objects = 6
+    num_objects = 4
 
     shelf_width = 0.6
     shelf_length = 0.25
     shelf_scale = 1.0
+
+    lidar_history_length = 3
     
     action_space = 3
     observation_space = {
-    "lidar": [3,2250], # TODO get lidar raycount from sensor config
-    "sensor": 3
+    "lidar": [lidar_history_length,2250], # TODO get lidar raycount from sensor config
+    "sensor": 4,
+    # "goal": 4,
     }
     state_space = 0 # only used for RNNs, defined to avoid warning
 
     num_envs = 1024
     env_spacing = 10.0
 
-    fin_dist = 0.25
+    fin_dist = 0.10     # 10 cm
+    fin_angle = 0.085   # approx 5 degrees
 
     # kinematics from https://research.ijcaonline.org/volume113/number3/pxc3901586.pdf
     wheel_radius = 0.05  # radius of the wheel
@@ -56,7 +61,7 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
 
     # simulation
     sim: SimulationCfg = SimulationCfg(
-        dt=1 / 300, # 300 Hz
+        dt=dt,
         render_interval=decimation,
         disable_contact_processing=True,
         physics_material=sim_utils.RigidBodyMaterialCfg(
