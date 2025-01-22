@@ -15,6 +15,7 @@ from omni.isaac.lab.sensors import ContactSensor, RayCaster
 
 from .robomaster_env_cfg import RobomasterEnvCfg
 
+
 class RobomasterEnv(DirectRLEnv):
     cfg: RobomasterEnvCfg
 
@@ -35,19 +36,15 @@ class RobomasterEnv(DirectRLEnv):
             device=self.device)
         
         self._dist_to_goal = torch.zeros(self.num_envs, device=self.device)
+        self._angle_error_goal = torch.zeros(self.num_envs, device=self.device)
         self._dist_to_goal_buf = torch.zeros(self.num_envs, device=self.device)
         self._dist_to_objects = torch.zeros(self.num_envs, self.cfg.num_objects, device=self.device)
         self._lidar_buf = torch.zeros(self.num_envs, *tuple(self.cfg.observation_space['lidar']), device=self.device)
         self._is_contact = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        self.goal_pose = torch.zeros(self.num_envs, 7, device=self.device)
 
         # Get specific body indices
         self._joint_ids, _ = self._robot.find_joints(["base_lf", "base_rf", "base_lb", "base_rb"])
-
-        # randomize goals
-        self.goal_pos = torch.zeros(self.num_envs, 3, device=self.device)
-        self.goal_pos[:, :2].uniform_(-(self.cfg.env_spacing - (2*self.cfg.fin_dist)) / 2, (self.cfg.env_spacing - (2*self.cfg.fin_dist)) / 2)
-        self.goal_pos += self.scene.env_origins
-        self.goal_pos[:, 2] = 0.1 # set goal on ground
 
         # TODO debug
         self._cur_step = 0
@@ -58,12 +55,15 @@ class RobomasterEnv(DirectRLEnv):
             for key in [
                 "delta_goal_dist_lin",
                 "object_dist_penalty_exp",
-                # "object_dist_penalty_lin",
-                "reached_goal",
+                "action_rate",
+                "goal_dist_lin",
+                "goal_vel_lin",
+                "goal_angle_lin",
                 "finished",
                 "contacts",
             ]
         }
+                
         self._finished = 0
         self._contact = 0
 
@@ -120,11 +120,22 @@ class RobomasterEnv(DirectRLEnv):
         self._robot.set_joint_velocity_target(self._processed_actions, joint_ids = self._joint_ids)
 
     def _get_observations(self) -> dict:
+        self._previous_actions = self._actions.clone()
+
+        # robo_odom = self._robot.data.root_pos_w[:, :2]
+        robo_lin_vel = self._robot.data.root_lin_vel_b[:, :2]
+        robo_ang_vel = self._robot.data.root_ang_vel_b[:, 2]
+        
         robo_yaw = yaw_from_quad(self._robot.data.root_quat_w)
+        goal_yaw = yaw_from_quad(self.goal_pose[:, 3:])
 
-        self._dist_to_goal = torch.norm(self.goal_pos - self._robot.data.root_pos_w, dim=-1) 
+        self._dist_to_goal = torch.norm(self.goal_pose[:, :3] - self._robot.data.root_pos_w, dim=-1) 
+        
+        # angle error to goal
+        angle_diff = goal_yaw - robo_yaw
+        self._angle_error_goal = torch.atan2(torch.sin(angle_diff), torch.cos(angle_diff))
 
-        rel_goal_pos = self.goal_pos - self._robot.data.root_pos_w
+        rel_goal_pos = self.goal_pose[:, :3] - self._robot.data.root_pos_w
         #rotate around z-axis to align with robot
         rel_goal_pos_rot = torch.zeros(self.num_envs, 2, device=self.device)
         rel_goal_pos_rot[:, 0] = rel_goal_pos[:, 0] * torch.cos(-robo_yaw.squeeze()) - rel_goal_pos[:, 1] * torch.sin(-robo_yaw.squeeze())
@@ -132,32 +143,46 @@ class RobomasterEnv(DirectRLEnv):
 
         # normalize lidar data
         lidar_data = self._lidar_scanner.data.ray_distances / self.cfg.lidar_scanner_cfg.max_distance
-        # lidar_data = self._lidar_scanner.data.ray_distances
-
-        # Shift the buffer to the back
+        # Shift the buffer to the back and nsert the new scan at the front
         self._lidar_buf[:, 1:] = self._lidar_buf[:, :-1]
-        # Insert the new scan at the front
         self._lidar_buf[:, 0] = lidar_data
 
-        dist_to_objecs = torch.empty(self.num_envs, 0, device=self.device)
-        # only for testing with GT postions of obstacles
-        for object in self._objects:
-            dist = torch.norm(object.data.root_pos_w - self._robot.data.root_pos_w, dim=-1).unsqueeze(1)
-            dist_to_objecs = torch.cat((dist_to_objecs, dist), dim=1)
+        # TODO do we we need this anymore?
+        # dist_to_objecs = torch.empty(self.num_envs, 0, device=self.device)
+        # # only for testing with GT postions of obstacles
+        # for object in self._objects:
+        #     dist = torch.norm(object.data.root_pos_w - self._robot.data.root_pos_w, dim=-1).unsqueeze(1)
+        #     dist_to_objecs = torch.cat((dist_to_objecs, dist), dim=1)
         
-        self._dist_to_objecs = dist_to_objecs
+        # self._dist_to_objecs = dist_to_objecs
 
         obs = {
             "lidar": self._lidar_buf,
-            "sensor":             
+            # TODO give sensor observations to actor and critic and goal only to critic
+            # "sensor": 
+            #     torch.cat(
+            #         [
+            #             tensor
+            #             for tensor in (
+            #                 # robo_odom, # TODO I think this is no good for learning, because its absolute and "random"
+            #                 # robo_yaw, # TODO see upper comment
+            #                 robo_lin_vel,
+            #                 robo_ang_vel.unsqueeze(1),
+            #             )
+            #             if tensor is not None
+            #         ],
+            #         dim=-1,
+            #     ),
+            # "goal": 
+            "sensor": 
                 # TODO check this again, should also work with just the rel_goal_pos_rot ?
-                # rel_goal_pos_rot,
                 torch.cat(
                     [
                         tensor
                         for tensor in (
                             rel_goal_pos_rot,
                             self._dist_to_goal.unsqueeze(1),
+                            self._angle_error_goal,
                         )
                         if tensor is not None
                     ],
@@ -177,9 +202,9 @@ class RobomasterEnv(DirectRLEnv):
         # reward += (5.0 - dist_to_goal) * 1.0
         self._dist_to_goal_buf = self._dist_to_goal
 
-        # penalty for distance to objects
-        # reward += -1/(self._dist_to_objecs ** 2).sum(dim=-1) * 0.5
-        # reward += torch.where(torch.any(self._dist_to_objecs < 1.5, dim = -1), torch.min(self._dist_to_objects, dim = -1)[0] - 2.0, 0)
+        # penalty for change in action for smoother actions
+        action_rate = torch.sum(torch.square(self._actions - self._previous_actions), dim=1)
+        self._previous_actions = self._actions.clone()
         
         # penalty for distance to objects based on lidar
         object_dist_penalty_exp = -1/(torch.min(self._lidar_scanner.data.ray_distances, dim= -1).values ** 3)
@@ -187,22 +212,37 @@ class RobomasterEnv(DirectRLEnv):
                                           (torch.min(self._lidar_scanner.data.ray_distances, dim= -1).values - 1.5)/1.5,
                                           0)
 
-        # finieshed
-        reached_goal = torch.where(self._dist_to_goal < self.cfg.fin_dist, 1, 0)
-        velocity = torch.norm(self._robot.data.root_lin_vel_w, dim=-1)
-        finished = torch.where(torch.logical_and( reached_goal, velocity < 0.1) , 1, 0)
+        velocity = torch.norm(self._robot.data.root_lin_vel_w, dim=-1) + torch.abs(self._robot.data.root_ang_vel_w[:, 2])
         
+        goal_dist_lin = torch.max(1-self._dist_to_goal, torch.zeros_like(self._dist_to_goal))
+        
+        # adjust error for 180-degree rotation
+        angle_error = torch.where(torch.abs(self._angle_error_goal) < math.pi/2,                                                    # when angle is smaller than pi/2
+                                  self._angle_error_goal,                                                                           # use the angle
+                                  (-torch.sign(self._angle_error_goal)) * (math.pi - torch.abs(self._angle_error_goal))).squeeze()  # else rotate 180 degrees
+        goal_angle_lin = torch.where(self._dist_to_goal < 1.0, 
+                                     1 - torch.abs(angle_error/(math.pi/2)),            
+                                     torch.zeros_like(angle_error)) 
+        goal_vel_lin = torch.where(self._dist_to_goal < 1.0, 
+                                   torch.max(1-velocity, torch.zeros_like(velocity)), 
+                                   torch.zeros_like(velocity))
+        
+        reached_goal = torch.where(self._dist_to_goal < self.cfg.fin_dist, 1, 0)
+        finished = torch.where(torch.logical_and( reached_goal, velocity < 0.1) , 1, 0) # TODO get threshold from cfg
+
         # check for contacts
         self._is_contact = (
             torch.max(torch.norm(self._contact_sensor.data.net_forces_w, dim=-1), dim=1)[0] > 0.0
         )
 
-        # TODO look into anymal example for scaling and step_dt
+        # TODO move scaling to cfg
         rewards = {
-            "delta_goal_dist_lin": delta_goal_dist_lin * 10.0 * self.step_dt,
+            "delta_goal_dist_lin": delta_goal_dist_lin * 100.0 * self.step_dt,
             "object_dist_penalty_exp": object_dist_penalty_exp * 0.005 * self.step_dt,
-            # "object_dist_penalty_lin": object_dist_penalty_lin * self.step_dt,
-            "reached_goal": reached_goal * 1.0 * self.step_dt,
+            "action_rate": action_rate * -0.01 * self.step_dt,
+            "goal_dist_lin": goal_dist_lin * 0.1 * self.step_dt,
+            "goal_vel_lin": goal_vel_lin * 0.05 * self.step_dt,
+            "goal_angle_lin": goal_angle_lin * 0.1 * self.step_dt,
             "finished": finished * 10.0 * self.step_dt,
             "contacts": self._is_contact * -1.0 * self.step_dt,
         }
@@ -221,12 +261,7 @@ class RobomasterEnv(DirectRLEnv):
         ones = torch.ones_like(time_out)
         died = torch.zeros_like(time_out)
         
-        # check distance to objects
-        # died = torch.where(torch.any(self._dist_to_objecs < 0.75, dim=-1), ones, died)
-        # check distance with lidar, cant do this because of shelf
-        # died = torch.where(torch.min(self._lidar_scanner.data.ray_distances, dim= -1).values < self.cfg.fin_dist, ones, died)
-
-        # TODO maybe we can allow cantacts with small force?
+        # TODO maybe we can allow contacts with small force?
         # contacts
         died = torch.where(self._is_contact, ones, died)
         self._contact = torch.sum(self._is_contact)
@@ -270,49 +305,37 @@ class RobomasterEnv(DirectRLEnv):
         self._robot.write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
 
         for object in self._objects:
-            object_pose = torch.zeros(num_resets, 7, device=self.device)
-            # object_pose[:, :3] = sample_circle((self.cfg.env_spacing * 0.75) / 2, ((self.cfg.env_spacing * 0.75) / 2) - 1.5, size=object_pose[:, :3].size(), z=0.1, device=self.device)
-            object_pose[:, :3] = sample_circle((self.cfg.env_spacing * 0.75) / 2, 1.0, size=object_pose[:, :3].size(), z=0.0, device=self.device)
+            object_pose = sample_pose((self.cfg.env_spacing * 0.75) / 2, 1.0, num_envs=num_resets, z=0.0, device=self.device)
             object_pose[:, :3] += env_positions
-            object_pose[:, 3:] = sample_yaw(num_resets, device=self.device)
 
             object.write_root_pose_to_sim(object_pose, env_ids)
 
-        # randomize goals
-        goal_pos = self.goal_pos.clone()
+        # randomize shelf position
+        goal_pose = self.goal_pose.clone()
         env_positions = self._terrain.env_origins
 
-        close = True
+        # make sure goals are not too close to other objects
         ids = env_ids.clone()
-        count = 0
-        while close:
-            if count > 1000:
-                print(f"Resetting goals {count}, {len(ids)} goals left")
-            count += 1
-            goal_pos[ids] = sample_circle(((self.cfg.env_spacing * 0.75) / 2) , 1.0, size=goal_pos[ids].size(), z=0.1, device=self.device)
-            goal_pos[ids] += env_positions[ids]
+        while True:
+            goal_pose[ids] = sample_pose((self.cfg.env_spacing * 0.75) / 2, 1.0, num_envs=len(ids), z=0.1, device=self.device)
+            goal_pose[ids, :3] += env_positions[ids]
 
             #reset ids and find close goals
             ids = torch.empty(0, device=self.device, dtype=torch.long)
             for object in self._objects:
                 # calculate dist to objects
-                dist = torch.norm(object.data.root_pos_w[env_ids] - goal_pos[env_ids], dim=-1)
+                dist = torch.norm(object.data.root_pos_w[env_ids] - goal_pose[env_ids, :3], dim=-1)
                 # get ids of close goals
                 ids = torch.unique(torch.cat((ids, torch.nonzero(dist < 1.0).view(-1))))
 
             ids = env_ids[ids]
-            close = len(ids) > 0
 
-        # TODO rename goal to shelf
-        # place goal visualization
-        self.goal_pos[env_ids] = goal_pos[env_ids]
+            if len(ids) == 0:
+                break
 
         # place shelf
-        goal_pose = torch.zeros(num_resets, 7, device=self.device)
-        goal_pose[:, :3] = self.goal_pos[env_ids]
-        goal_pose[:, 3:] = sample_yaw(num_resets, device=self.device) # TODO do we need this somewhere else?
-        # self._shelf.write_root_pose_to_sim(goal_pose, env_ids)
-        self.place_shelf(env_ids, goal_pose)
+        self.goal_pose[env_ids] = goal_pose[env_ids]
+        self.place_shelf(env_ids, goal_pose[env_ids])
 
         super()._reset_idx(env_ids)
         
@@ -349,16 +372,22 @@ class RobomasterEnv(DirectRLEnv):
             self._shelf[key].write_root_pose_to_sim(leg_pose, env_ids)
 
 
-def sample_circle(max_radius, min_radius, size = torch.Size([1,3]), z = 0.0, device = None):
+def sample_pose(max_radius, min_radius, num_envs, z = 0.0, device = None):
+    pose = torch.zeros((num_envs, 7), device=device)
+    pose[:, :3] = sample_circle(max_radius, min_radius, num_envs=num_envs, z=z, device=device)
+    pose[:, 3:] = sample_yaw(num_envs, device=device)
+    return pose
+
+def sample_circle(max_radius, min_radius, num_envs, z = 0.0, device = None):
     # sample uniformly from a circle with a maximum radius of max_radius with a height of z from a circle aligned with the z-axis 
     # https://stackoverflow.com/questions/5837572/generate-a-random-point-within-a-circle-uniformly
 
-    r = torch.sqrt(torch.rand(size[0]) * (max_radius**2 - min_radius**2) + min_radius**2)
+    r = torch.sqrt(torch.rand(num_envs) * (max_radius**2 - min_radius**2) + min_radius**2)
 
     # r = max_radius * torch.sqrt(torch.rand(size[0]))
-    theta = 2 * math.pi * torch.rand(size[0])
+    theta = 2 * math.pi * torch.rand(num_envs)
 
-    points = torch.zeros(size, device=device)
+    points = torch.zeros((num_envs, 3), device=device)
     points[:, 0] = r * torch.cos(theta)
     points[:, 1] = r * torch.sin(theta)
     points[:, 2] = z
@@ -381,7 +410,7 @@ def yaw_from_quad(quad):
         yaw = torch.atan2(2.0 * (x*y + w*z), w*w + x*x - y*y - z*z).unsqueeze(1)
 
         return yaw
-    
+
 def rotate_vec_2d(vec, quad):
     # rotate a vector around the z-axis
     yaw = yaw_from_quad(quad)

@@ -148,10 +148,13 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
     lidar_scanner_cfg = RayCasterCfg(
         prim_path="/World/envs/env_.*/Robot/base_link",
         mesh_prim_paths=lidar_prim_paths,
+        # TODO skip rays cfg
         pattern_cfg=patterns.LidarPatternCfg(channels=1, vertical_fov_range=(0.0, 0.0), horizontal_fov_range=(-135.0, 135.0), horizontal_res=0.12),
         offset=OffsetCfg(pos=(0.1, 0.0, 0.083)),
         attach_yaw_only=True,
         debug_vis=False, # TODO flag for when video is recorded
+        drift_range=(-0.05, 0.05), # TODO check drift range
+        # TODO implement noise for distance readings
         max_distance=5.0
     )
 
