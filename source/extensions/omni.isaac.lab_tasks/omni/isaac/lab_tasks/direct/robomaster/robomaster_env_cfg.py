@@ -153,8 +153,9 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
         offset=OffsetCfg(pos=(0.1, 0.0, 0.083)),
         attach_yaw_only=True,
         debug_vis=False, # TODO flag for when video is recorded
-        drift_range=(-0.05, 0.05), # TODO check drift range
-        # TODO implement noise for distance readings
+        # TODO add noise back when we learned somthing without
+        # drift_range=(-0.05, 0.05), # TODO check drift range
+        # accuracy=0.05,
         max_distance=5.0
     )
 

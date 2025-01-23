@@ -68,6 +68,17 @@ class RayCasterCfg(SensorBaseCfg):
     For floating base robots, this is useful for simulating drift in the robot's pose estimation.
     """
 
+    accuracy: float = 0.0
+    """The accuracy (in meters) of the ray distance readings (in meters). Defaults to 0.0.
+
+    Accuracy is used to simulate noise in the sensor's distance measurements. Accuracy is the range of the 95% 
+    confidence interval.
+
+    Note:
+        This only effects the distance readings, not the ray hits itself or the Visualization. 
+        Feel free to implement this yourself when needed. 
+    """
+
     visualizer_cfg: VisualizationMarkersCfg = RAY_CASTER_MARKER_CFG.replace(prim_path="/Visuals/RayCaster")
     """The configuration object for the visualization markers. Defaults to RAY_CASTER_MARKER_CFG.
 

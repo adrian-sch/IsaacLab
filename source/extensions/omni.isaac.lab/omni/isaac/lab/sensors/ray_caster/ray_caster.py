@@ -320,6 +320,8 @@ class RayCaster(SensorBase):
         self.ray_directions = self.ray_directions.repeat(self._view.count, 1, 1)
         # prepare drift
         self.drift = torch.zeros(self._view.count, 3, device=self.device)
+        # prepare noise, calculate stadnrt deviation from accuracs in a 95% confidence interval
+        self.noise_level = self.cfg.accuracy / 1.96
         # fill the data buffer
         self._data.pos_w = torch.zeros(self._view.count, 3, device=self._device)
         self._data.quat_w = torch.zeros(self._view.count, 4, device=self._device)
@@ -385,7 +387,8 @@ class RayCaster(SensorBase):
                 ray_hits = torch.where(expanded_mask, new_ray_hits, ray_hits)
 
         self._data.ray_hits_w[env_ids] = ray_hits
-        self._data.ray_distances[env_ids] = ray_distances
+        noise = torch.normal(mean=0.0, std=self.noise_level, size=(len(env_ids), self.num_rays))
+        self._data.ray_distances[env_ids] = ray_distances + noise
 
     def _set_debug_vis_impl(self, debug_vis: bool):
         # set visibility of markers
