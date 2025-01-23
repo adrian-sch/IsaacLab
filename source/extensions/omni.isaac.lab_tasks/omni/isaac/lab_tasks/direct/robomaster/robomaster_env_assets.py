@@ -10,7 +10,6 @@ from omni.isaac.lab.utils.assets import ISAAC_NUCLEUS_DIR
 # model_dir_path = "/home/admin-jfinke/Projects"
 model_dir_path = os.path.abspath("../isaac_models")
 robomaster_usd_path = model_dir_path + "/robomaster_model/usd_files/robomaster_usd_texturesV2/Robomaster_visuals_v2_modified.usd"
-# robomaster_usd_path = model_dir_path + "/robomaster_model/usd_files/robomaster_usd_texturesV2/Robomaster_visuals_v2_simplified_highres_viz.usd"
 arena_usd_path = model_dir_path + "/Isaac_RL_Stage_Blender/rl_stage.usd"
 
 
@@ -29,8 +28,6 @@ ROBOMASTER_CFG = ArticulationCfg(
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
             enabled_self_collisions=False,
-            # solver_position_iteration_count=8, # dont know from where i got this
-            # solver_velocity_iteration_count=2, # dont know from where i got this
             solver_position_iteration_count=4, # from anymal example
             solver_velocity_iteration_count=1,
             sleep_threshold=0.005,
@@ -45,7 +42,7 @@ ROBOMASTER_CFG = ArticulationCfg(
     actuators={
         "base_link": ImplicitActuatorCfg(
             joint_names_expr=["base.*"],
-            # stiffnet and damping tuned with tuning guide: https://docs.omniverse.nvidia.com/isaacsim/latest/advanced_tutorials/tutorial_advanced_joint_tuning.html
+            # stiffness and damping tuned with tuning guide: https://docs.omniverse.nvidia.com/isaacsim/latest/advanced_tutorials/tutorial_advanced_joint_tuning.html
             stiffness=0.0, # needs to be 0 for velocity control
             damping=0.5,
             # from datasheet https://www.dji.com/de/robomaster-ep/specs

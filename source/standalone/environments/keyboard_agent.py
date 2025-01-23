@@ -37,7 +37,7 @@ from omni.isaac.lab_tasks.utils import parse_env_cfg
 
 from pynput import keyboard
 
-value = 1.0
+value = 0.5
 
 def main():
     """Zero actions agent with Isaac Lab environment."""
