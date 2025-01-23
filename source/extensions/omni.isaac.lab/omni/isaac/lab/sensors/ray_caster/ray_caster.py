@@ -387,7 +387,7 @@ class RayCaster(SensorBase):
                 ray_hits = torch.where(expanded_mask, new_ray_hits, ray_hits)
 
         self._data.ray_hits_w[env_ids] = ray_hits
-        noise = torch.normal(mean=0.0, std=self.noise_level, size=(len(env_ids), self.num_rays))
+        noise = torch.normal(mean=0.0, std=self.noise_level, size=(len(env_ids), self.num_rays), device=self._device)
         self._data.ray_distances[env_ids] = ray_distances + noise
 
     def _set_debug_vis_impl(self, debug_vis: bool):
