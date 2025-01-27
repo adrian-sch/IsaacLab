@@ -109,6 +109,7 @@ def main():
             # compute zero actions
             # actions = torch.zeros(env.action_space.shape, device=env.unwrapped.device)
             # apply actions
+            print(f"Action value: {action_value}")
             env.step(action_value)
 
     # close the simulator

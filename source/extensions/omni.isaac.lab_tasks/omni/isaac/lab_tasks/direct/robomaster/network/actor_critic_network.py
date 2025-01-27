@@ -1,5 +1,5 @@
 from .base_network import BaseNetwork
-from .util import input_shape_split_into_lidar_and_sensor, input_shape_calculate_flatten_size, output_shape_calculate_from_model_flatten, observation_split_into_lidar_and_sensor
+from .util import *
 from .layer.action_holonomic_limiter import ActionHolonomicLimiter
 from torch import nn
 import torch
@@ -13,7 +13,6 @@ class ActorCriticNetwork(BaseNetwork):
         output_shape = kwargs.pop('actions_num')
         input_shape = kwargs.pop('input_shape')
 
-        self._separate = params.get("separate", False)
         self._fixed_sigma = params.get("fixed_sigma", True)
         self._device = params.get("device", "cuda")
 
@@ -29,41 +28,41 @@ class ActorCriticNetwork(BaseNetwork):
         self._critic_mlp_sensor = nn.Sequential()
         self._critic_mlp = nn.Sequential()
 
-        input_shape_lidar, input_shape_sensor = input_shape_split_into_lidar_and_sensor(input_shape=input_shape)
+        input_shape_lidar, input_shape_sensor, input_shape_goal = split_input_shape(input_shape=input_shape)
         input_shape_lidar = input_shape_lidar["lidar"]
         input_shape_sensor = input_shape_calculate_flatten_size(input_shape_sensor)
+        input_shape_goal = input_shape_calculate_flatten_size(input_shape_goal)
 
         if "cnn" in params:
             self._actor_cnn = self._build_conv(input_shape_lidar, **params["cnn"])
-            if self._separate:
-                self._critic_cnn = self._build_conv(input_shape_lidar, **params["cnn"])
+            self._critic_cnn = self._build_conv(input_shape_lidar, **params["cnn"])
 
         output_shape_cnn = output_shape_calculate_from_model_flatten(input_shape_lidar, self._actor_cnn)
 
         if "mlp_lidar" in params:
             self._actor_mlp_lidar = self._build_mlp(input_size=output_shape_cnn, **params["mlp_lidar"])
-            if self._separate:
-                self._critic_mlp_lidar = self._build_mlp(input_size=output_shape_cnn, **params["mlp_lidar"])
+            self._critic_mlp_lidar = self._build_mlp(input_size=output_shape_cnn, **params["mlp_lidar"])
 
         output_shape_mlp_lidar = output_shape_calculate_from_model_flatten((output_shape_cnn,), self._actor_mlp_lidar)
 
         if "mlp_sensor" in params:
-            self._actor_mlp_sensor = self._build_mlp(input_size=input_shape_sensor, **params["mlp_sensor"])
-            if self._separate:
-                self._critic_mlp_sensor = self._build_mlp(input_size=input_shape_sensor, **params["mlp_sensor"])
+            input_shape_c_mlp_sensor = input_shape_sensor + input_shape_goal
 
-        output_shape_mlp_sensor = output_shape_calculate_from_model_flatten((input_shape_sensor,), self._actor_mlp_sensor)
-        input_shape_mlp = output_shape_mlp_lidar + output_shape_mlp_sensor
+            self._actor_mlp_sensor = self._build_mlp(input_size=input_shape_sensor, **params["mlp_sensor"])
+            self._critic_mlp_sensor = self._build_mlp(input_size=input_shape_c_mlp_sensor, **params["mlp_sensor"])
+
+        output_shape_a_mlp_sensor = output_shape_calculate_from_model_flatten((input_shape_sensor,), self._actor_mlp_sensor)
+        output_shape_c_mlp_sensor = output_shape_calculate_from_model_flatten((input_shape_c_mlp_sensor,), self._critic_mlp_sensor)
 
         if "mlp" in params:
-            # self._actor_mlp = self._build_mlp(input_size=input_shape_mlp, **params["mlp"])
-            self._actor_mlp = self._build_mlp(input_size=output_shape_mlp_lidar, **params["mlp"])
-            if self._separate:
-                self._critic_mlp = self._build_mlp(input_size=input_shape_mlp, **params["mlp"])
+            input_shape_a_mlp = output_shape_mlp_lidar + output_shape_a_mlp_sensor
+            input_shape_c_mlp = output_shape_mlp_lidar + output_shape_c_mlp_sensor
 
-        # output_shape_mlp = output_shape_calculate_from_model_flatten((input_shape_mlp,), self._actor_mlp)
-        output_shape_a_mlp = output_shape_calculate_from_model_flatten((output_shape_mlp_lidar,), self._actor_mlp)
-        output_shape_c_mlp = output_shape_calculate_from_model_flatten((input_shape_mlp,), self._critic_mlp)
+            self._actor_mlp = self._build_mlp(input_size=input_shape_a_mlp, **params["mlp"])
+            self._critic_mlp = self._build_mlp(input_size=input_shape_c_mlp, **params["mlp"])
+
+        output_shape_a_mlp = output_shape_calculate_from_model_flatten((input_shape_a_mlp,), self._actor_mlp)
+        output_shape_c_mlp = output_shape_calculate_from_model_flatten((input_shape_c_mlp,), self._critic_mlp)
 
         self._mu = nn.Linear(in_features=output_shape_a_mlp, out_features=output_shape)
         self._value = nn.Linear(in_features=output_shape_c_mlp, out_features=1)
@@ -71,52 +70,41 @@ class ActorCriticNetwork(BaseNetwork):
         if self._fixed_sigma:
             self._sigma = nn.Parameter(torch.zeros(output_shape, requires_grad=True, dtype=torch.float32), requires_grad=True)
         else:
-            self._sigma = nn.Linear(in_features=output_shape_mlp, out_features=output_shape)
+            self._sigma = nn.Linear(in_features=output_shape_a_mlp, out_features=output_shape)
 
         self.to(self._device)
 
     def forward(self, observation):
-        lidar, sensor = observation_split_into_lidar_and_sensor(observation['obs'])
+        lidar, sensor, goal = split_observation(observation['obs'])
         lidar = lidar["lidar"].to(self._device)
         sensor = torch.cat([x.flatten(start_dim=1) for x in sensor.values()], dim=1).to(self._device)
+        goal = torch.cat([x.flatten(start_dim=1) for x in goal.values()], dim=1).to(self._device)
 
+        # add noise to sensor
         sensor += torch.normal(0, 0.0125, sensor.shape, device=self._device)
 
-        if self._separate:
-            a_lidar = self._actor_cnn(lidar)
-            c_lidar = self._critic_cnn(lidar)
+        c_in = torch.cat([sensor, goal], dim=1)
 
-            a_lidar = torch.flatten(a_lidar, start_dim=1)
-            c_lidar = torch.flatten(c_lidar, start_dim=1)
+        a_lidar_out = self._actor_cnn(lidar)
+        c_lidar_out = self._critic_cnn(lidar)
 
-            a_lidar = self._actor_mlp_lidar(a_lidar)
-            c_lidar = self._critic_mlp_lidar(c_lidar)
+        a_lidar_out = torch.flatten(a_lidar_out, start_dim=1)
+        c_lidar_out = torch.flatten(c_lidar_out, start_dim=1)
 
-            a_sensor = self._actor_mlp_sensor(sensor)
-            c_sensor = self._critic_mlp_sensor(sensor)
+        a_lidar_out = self._actor_mlp_lidar(a_lidar_out)
+        c_lidar_out = self._critic_mlp_lidar(c_lidar_out)
 
-            # a_out = torch.cat([a_lidar, a_sensor], dim=1)
-            a_out = a_lidar
-            c_out = torch.cat([c_lidar, c_sensor], dim=1)
+        a_mlp_out = self._actor_mlp_sensor(sensor)
+        c_mpl_out = self._critic_mlp_sensor(c_in)
 
-            a_out = self._actor_mlp(a_out)
-            c_out = self._critic_mlp(c_out)
+        a_out = torch.cat([a_lidar_out, a_mlp_out], dim=1)
+        c_out = torch.cat([c_lidar_out, c_mpl_out], dim=1)
 
-            mu = torch.tanh(self._mu(a_out))
-            value = self._value(c_out)
+        a_out = self._actor_mlp(a_out)
+        c_out = self._critic_mlp(c_out)
 
-        else:
-            a_lidar = self._actor_cnn(lidar)
-            a_lidar = torch.flatten(a_lidar, start_dim=1)
-            a_lidar = self._actor_mlp_lidar(a_lidar)
-
-            a_sensor = self._actor_mlp_sensor(sensor)
-
-            a_out = torch.cat([a_lidar, a_sensor], dim=1)
-            a_out = self._actor_mlp(a_out)
-
-            mu = torch.tanh(self._mu(a_out))
-            value = self._value(a_out)
+        mu = torch.tanh(self._mu(a_out))
+        value = self._value(c_out)
 
         if self._actor_limiter:
             mu = self._actor_limiter(mu)
