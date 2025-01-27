@@ -16,12 +16,12 @@ params:
   network:
 
     name: christian_net
-    separate: true
+    # separate: true
     fixed_sigma: true
 
-    action_limiter:
-      begin: 0.0
-      end: 1.0
+    # action_limiter:
+    #   begin: 0.0
+    #   end: 1.0
 
     cnn:
       type: "impala1d"
@@ -49,7 +49,6 @@ params:
       activation: "relu"
       units: [256]
 
-
   load_checkpoint: False # flag which sets whether to load the checkpoint
   load_path: '' # path to the checkpoint to load
 
@@ -66,7 +65,8 @@ params:
     value_bootstrap: True
     num_actors: -1  # configured from the script (based on num_envs)
     reward_shaper:
-      scale_value: 0.6
+      scale_value: 1.0
+      # scale_value: 0.6
     normalize_advantage: True
     gamma: 0.99
     tau: 0.95
@@ -75,8 +75,8 @@ params:
     schedule_type: legacy
     kl_threshold: 0.01
     score_to_win: 10000
-    max_epochs: 50000000
-    save_best_after: 10
+    max_epochs: 5000000
+    save_best_after: 50
     save_frequency: 100
     grad_norm: 1.0
     entropy_coef: 0.005
@@ -88,9 +88,10 @@ params:
     # minibatch_size: 512
 
     # for 1024 envs
-    horizon_length: 16
-    minibatch_size: 16384
+    horizon_length: 24 # batch_size = 24576
+    minibatch_size: 6144 # 24576 / 6144 = 4
 
+    # for 4096 envs
     # horizon_length: 24
     # minibatch_size: 24576
     mini_epochs: 5
