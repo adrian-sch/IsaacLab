@@ -65,11 +65,11 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
         render_interval=decimation,
         disable_contact_processing=True,
         physics_material=sim_utils.RigidBodyMaterialCfg(
-            friction_combine_mode="multiply",
-            restitution_combine_mode="multiply",
-            static_friction=1.0, # TODO check friction
-            dynamic_friction=1.0,
-            restitution=0.0,
+            # friction_combine_mode="average",
+            # restitution_combine_mode="average",
+            # static_friction=0.5, # TODO check friction
+            # dynamic_friction=0.5,
+            # restitution=0.0,
         ),
         # TODO flag for when video is recorded
         # TODO only for visualization, reduces performance
