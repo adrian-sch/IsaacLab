@@ -1,4 +1,6 @@
 
+import math
+
 import omni.isaac.lab.sim as sim_utils
 from omni.isaac.lab.assets import ArticulationCfg
 from omni.isaac.lab.envs import DirectRLEnvCfg, ViewerCfg
@@ -9,6 +11,7 @@ from omni.isaac.lab.assets import RigidObjectCfg
 from omni.isaac.lab.terrains import TerrainImporterCfg
 from omni.isaac.lab.markers import VisualizationMarkersCfg
 from omni.isaac.lab.utils import configclass
+from omni.isaac.lab.managers import EventTermCfg as EventTerm
 
 from .robomaster_env_assets import ROBOMASTER_CFG, ARENA_CFG, BOX_01_CFG, BOX_02_CFG, BOX_03_CFG, PALLET_CFG, DRUM_CFG, SHELF_LEG_CFG
 
@@ -17,8 +20,8 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
 
     # TODO flag for when video is recorded
     viewer: ViewerCfg = ViewerCfg(
-        eye=(25.0, 25.0, 10.0),
-        lookat=(0.0, 0.0, 0.0),
+        eye=(30.0, 0.0, 7.5),
+        lookat=(10.0, 0.0, 0.0),
         resolution=(1920, 1080),
     )
     
@@ -35,8 +38,11 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
 
     shelf_width = 0.6
     shelf_length = 0.25
-    shelf_scale = 1.0
+    shelf_scale = 2.0               # starting scale of shelf, shrink by x every y episodes untill 1
+    shelf_shrink_steps = 50 * 24    # shrink shelf every y steps, see rl_config for steps per episode (horizon_length)
+    shelf_shrink_by = 0.05          # shrink self by x: shelf_scale -= shelf_shrink_by
 
+    lidar_skip_rays = 1 # reduces the amount of rays to simulate a lower resolution and reduce computation, when 0 all rays are used
     lidar_history_length = 3
     
     action_space = 3

@@ -42,12 +42,12 @@ class RobomasterEnv(DirectRLEnv):
         self._lidar_buf = torch.zeros(self.num_envs, *tuple(self.cfg.observation_space['lidar']), device=self.device)
         self._is_contact = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         self.goal_pose = torch.zeros(self.num_envs, 7, device=self.device)
-
+        self._cur_step = 0
+        self.shelf_scale = self.cfg.shelf_scale
+        
         # Get specific body indices
         self._joint_ids, _ = self._robot.find_joints(["base_lf", "base_rf", "base_lb", "base_rb"])
 
-        # TODO debug
-        self._cur_step = 0
 
         # Logging
         self._episode_sums = {
@@ -55,9 +55,9 @@ class RobomasterEnv(DirectRLEnv):
             for key in [
                 "delta_goal_dist_lin",
                 "object_dist_penalty_exp",
-                "action_rate",
+                # "action_rate",
                 "goal_dist_lin",
-                "goal_vel_lin",
+                # "goal_vel_lin",
                 "goal_angle_lin",
                 "finished",
                 "contacts",
@@ -158,24 +158,21 @@ class RobomasterEnv(DirectRLEnv):
 
         obs = {
             "lidar": self._lidar_buf,
-            # TODO give sensor observations to actor and critic and goal only to critic
-            # "sensor": 
-            #     torch.cat(
-            #         [
-            #             tensor
-            #             for tensor in (
-            #                 # robo_odom, # TODO I think this is no good for learning, because its absolute and "random"
-            #                 # robo_yaw, # TODO see upper comment
-            #                 robo_lin_vel,
-            #                 robo_ang_vel.unsqueeze(1),
-            #             )
-            #             if tensor is not None
-            #         ],
-            #         dim=-1,
-            #     ),
-            # "goal": 
             "sensor": 
-                # TODO check this again, should also work with just the rel_goal_pos_rot ?
+                torch.cat(
+                    [
+                        tensor
+                        for tensor in (
+                            # robo_odom, # TODO I think this is no good for learning, because its absolute and "random"
+                            # robo_yaw, # TODO see upper comment
+                            robo_lin_vel,
+                            robo_ang_vel.unsqueeze(1),
+                        )
+                        if tensor is not None
+                    ],
+                    dim=-1,
+                ),
+            "goal":
                 torch.cat(
                     [
                         tensor
@@ -207,7 +204,7 @@ class RobomasterEnv(DirectRLEnv):
         self._previous_actions = self._actions.clone()
         
         # penalty for distance to objects based on lidar
-        object_dist_penalty_exp = -1/(torch.min(self._lidar_scanner.data.ray_distances, dim= -1).values ** 3)
+        object_dist_penalty_exp = 1/(torch.min(self._lidar_scanner.data.ray_distances, dim= -1).values ** 3)
         object_dist_penalty_lin = torch.where(torch.min(self._lidar_scanner.data.ray_distances, dim= -1).values < 1.5, 
                                           (torch.min(self._lidar_scanner.data.ray_distances, dim= -1).values - 1.5)/1.5,
                                           0)
@@ -224,9 +221,13 @@ class RobomasterEnv(DirectRLEnv):
                                      1 - torch.abs(angle_error/(math.pi/2)),            
                                      torch.zeros_like(angle_error)) 
         goal_vel_lin = torch.where(self._dist_to_goal < 1.0, 
-                                   torch.max(1-velocity, torch.zeros_like(velocity)), 
+                                   velocity, 
                                    torch.zeros_like(velocity))
         
+        # print(f"Goal distance: {self._dist_to_goal[0]}")
+        # print(f"Goal angle: {angle_error[0]}")
+        # print(f"Goal velocity: {velocity[0]}")
+
         reached_goal = torch.where(self._dist_to_goal < self.cfg.fin_dist, 1, 0)
         finished = torch.where(torch.logical_and( reached_goal, velocity < 0.1) , 1, 0) # TODO get threshold from cfg
 
@@ -237,14 +238,14 @@ class RobomasterEnv(DirectRLEnv):
 
         # TODO move scaling to cfg
         rewards = {
-            "delta_goal_dist_lin": delta_goal_dist_lin * 100.0 * self.step_dt,
-            "object_dist_penalty_exp": object_dist_penalty_exp * 0.005 * self.step_dt,
-            "action_rate": action_rate * -0.01 * self.step_dt,
-            "goal_dist_lin": goal_dist_lin * 0.1 * self.step_dt,
-            "goal_vel_lin": goal_vel_lin * 0.05 * self.step_dt,
-            "goal_angle_lin": goal_angle_lin * 0.1 * self.step_dt,
-            "finished": finished * 10.0 * self.step_dt,
-            "contacts": self._is_contact * -1.0 * self.step_dt,
+            "delta_goal_dist_lin": delta_goal_dist_lin * 10.0 * self.step_dt,
+            "object_dist_penalty_exp": object_dist_penalty_exp * -0.0005 * self.step_dt,
+            # "action_rate": action_rate * -0.01 * self.step_dt,
+            "goal_dist_lin": goal_dist_lin * 0.5 * self.step_dt,
+            "goal_angle_lin": goal_angle_lin * 0.2 * self.step_dt,
+            # "goal_vel_lin": goal_vel_lin * -0.025 * self.step_dt,
+            "finished": finished * 1000.0 * self.step_dt,
+            "contacts": self._is_contact * -10.0 * self.step_dt,
         }
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
         # Logging
@@ -269,7 +270,7 @@ class RobomasterEnv(DirectRLEnv):
         # check if robot reached goal and is standing still
         reached_goal = self._dist_to_goal < self.cfg.fin_dist
         velocity = torch.norm(self._robot.data.root_lin_vel_w, dim=-1)
-        finished = torch.logical_and( reached_goal, velocity < 0.1)
+        finished = torch.logical_and(reached_goal, velocity < 0.1)
         self._finished = torch.sum(finished)
         died = torch.where(finished, ones, died)
 
@@ -277,6 +278,14 @@ class RobomasterEnv(DirectRLEnv):
         # TODO still needed with contact sensor?
         # TODO optinal, check if robo is flipped
         died = torch.where(self._robot.data.root_pos_w[:, 2] > 0.2, ones, died)
+
+        # TODO is this the best position for this?
+        # update shelf scale
+        print(self._cur_step)
+        if (self._cur_step % self.cfg.shelf_shrink_steps == 0):
+
+            self.shelf_scale = max(1.0, self.shelf_scale - self.cfg.shelf_shrink_by)
+            print(f"Shrinking shelf, new shelf scale: {self.shelf_scale}")
 
         return died, time_out
 
@@ -338,6 +347,8 @@ class RobomasterEnv(DirectRLEnv):
         self.place_shelf(env_ids, goal_pose[env_ids])
 
         super()._reset_idx(env_ids)
+
+        
         
         # Logging
         extras = dict()
@@ -363,7 +374,7 @@ class RobomasterEnv(DirectRLEnv):
         }
         
         for key, leg_pos in legs_pos.items():
-            leg_pos = leg_pos * self.cfg.shelf_scale # TODO change scale while learning
+            leg_pos = leg_pos * self.shelf_scale
             leg_pos = rotate_vec_2d(leg_pos.unsqueeze(0), goal_pose[:, 3:]).squeeze()
             
             leg_pose = goal_pose.clone()
