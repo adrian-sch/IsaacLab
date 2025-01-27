@@ -41,9 +41,9 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
     
     action_space = 3
     observation_space = {
-    "lidar": [lidar_history_length,2250], # TODO get lidar raycount from sensor config
-    "sensor": 4,
-    # "goal": 4,
+    "lidar": [lidar_history_length,int(2250/(int(lidar_skip_rays+1)))], # TODO get lidar raycount from sensor config
+    "sensor": 3,
+    "goal": 4,
     }
     state_space = 0 # only used for RNNs, defined to avoid warning
 
@@ -149,7 +149,7 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
         prim_path="/World/envs/env_.*/Robot/base_link",
         mesh_prim_paths=lidar_prim_paths,
         # TODO skip rays cfg
-        pattern_cfg=patterns.LidarPatternCfg(channels=1, vertical_fov_range=(0.0, 0.0), horizontal_fov_range=(-135.0, 135.0), horizontal_res=0.12),
+        pattern_cfg=patterns.LidarPatternCfg(channels=1, vertical_fov_range=(0.0, 0.0), horizontal_fov_range=(-135.0, 135.0), horizontal_res=0.12 * int(lidar_skip_rays + 1)),
         offset=OffsetCfg(pos=(0.1, 0.0, 0.083)),
         attach_yaw_only=True,
         debug_vis=False, # TODO flag for when video is recorded
