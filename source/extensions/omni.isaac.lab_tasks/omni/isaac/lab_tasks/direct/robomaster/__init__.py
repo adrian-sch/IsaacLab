@@ -31,17 +31,6 @@ gym.register(
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": RobomasterEnvCfg,
-        # "rl_games_cfg_entry_point": f"{agents.__name__}:rl_games_ppo_cfg.yaml",
-        "rl_games_cfg_entry_point": f"{agents.__name__}:rl_games_ppo_cfg_lidar.yaml",
-    },
-)
-
-gym.register(
-    id="Isaac-Robomaster-Glide-Direct-v0",
-    entry_point="omni.isaac.lab_tasks.direct.robomaster:RobomasterGlideEnv",
-    disable_env_checker=True,
-    kwargs={
-        "env_cfg_entry_point": RobomasterGlideEnvCfg,
         "rl_games_cfg_entry_point": f"{agents.__name__}:rl_games_ppo_cfg.yaml",
     },
 )

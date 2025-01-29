@@ -26,6 +26,7 @@ parser.add_argument(
     action="store_true",
     help="When no checkpoint provided, use the last saved model. Otherwise use the best saved model.",
 )
+parser.add_argument("--debug_viz", action="store_true", default=False, help="Enable debug visualization.")
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 # parse the arguments
@@ -92,8 +93,12 @@ def main():
     clip_obs = agent_cfg["params"]["env"].get("clip_observations", math.inf)
     clip_actions = agent_cfg["params"]["env"].get("clip_actions", math.inf)
 
+    env_kwargs = {
+        "train": False,
+        "debug": args_cli.debug_viz,
+    }
     # create isaac environment
-    env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
+    env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None, **env_kwargs)
     # wrap for video recording
     if args_cli.video:
         video_kwargs = {

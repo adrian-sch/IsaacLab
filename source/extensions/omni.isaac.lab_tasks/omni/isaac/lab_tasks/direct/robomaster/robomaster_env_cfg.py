@@ -1,5 +1,7 @@
 
 import math
+import yaml
+import os
 
 import omni.isaac.lab.sim as sim_utils
 from omni.isaac.lab.assets import ArticulationCfg
@@ -12,11 +14,17 @@ from omni.isaac.lab.terrains import TerrainImporterCfg
 from omni.isaac.lab.markers import VisualizationMarkersCfg
 from omni.isaac.lab.utils import configclass
 from omni.isaac.lab.managers import EventTermCfg as EventTerm
+from omni.isaac.lab.utils.io import load_yaml
 
 from .robomaster_env_assets import ROBOMASTER_CFG, ARENA_CFG, BOX_01_CFG, BOX_02_CFG, BOX_03_CFG, PALLET_CFG, DRUM_CFG, SHELF_LEG_CFG
 
 @configclass
 class RobomasterEnvCfg(DirectRLEnvCfg):
+    # TODO move all cfgs to yaml and log it when training
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    cfg_file = os.path.join(current_dir, "robomaster_env_cfg.yaml")
+    cfg_full = load_yaml(cfg_file)
+    cfg = cfg_full.get("params", {})
 
     # TODO flag for when video is recorded
     viewer: ViewerCfg = ViewerCfg(
@@ -26,43 +34,46 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
     )
     
     # env
-    episode_length_s = 20.0
-    dt = 1.0/120.0              # 120 Hz
-    decimation = int(1/(dt*10)) # 10 Hz
-    action_scale_x_pos = 2.0
-    action_scale_x_neg = 0.5
-    action_scale_y = 1.25
-    action_scale_ang = 3.14
+    episode_length_s = cfg["episode_length_s"]
+    dt = 1.0/cfg["simulation_rate"]
+    decimation = int(1/(dt*cfg["inference_rate"]))     # 10 Hz
+    action_scale_x_pos = cfg["action_scale_x_pos"]
+    action_scale_x_neg = cfg["action_scale_x_neg"]
+    action_scale_y = cfg["action_scale_y"]
+    action_scale_ang = cfg["action_scale_ang"]
     
-    num_objects = 4
+    num_objects = cfg["num_objects"]
 
-    shelf_width = 0.6
-    shelf_length = 0.25
-    shelf_scale = 2.0               # starting scale of shelf, shrink by x every y episodes untill 1
-    shelf_shrink_steps = 50 * 24    # shrink shelf every y steps, see rl_config for steps per episode (horizon_length)
-    shelf_shrink_by = 0.05          # shrink self by x: shelf_scale -= shelf_shrink_by
+    shelf_width = cfg["shelf_width"]
+    shelf_length = cfg["shelf_length"]
+    shelf_scale = cfg["shelf_scale"]               # starting scale of shelf, shrink by x every y episodes untill 1
+    shelf_shrink_steps = cfg["shelf_shrink_epidoes"] * cfg["horizon_length"]     # shrink shelf every y steps, see rl_config for steps per episode (horizon_length)
+    shelf_shrink_by = cfg["shelf_shrink_by"]          # shrink self by x: shelf_scale -= shelf_shrink_by
 
-    lidar_skip_rays = 1 # reduces the amount of rays to simulate a lower resolution and reduce computation, when 0 all rays are used
-    lidar_history_length = 3
+    lidar_skip_rays = cfg["lidar_skip_rays"]             # reduces the amount of rays to simulate a lower resolution and reduce computation, when 0 all rays are used
+    lidar_history_length = cfg["lidar_history_length"] 
     
     action_space = 3
+
+    num_rays = int((abs(cfg["lidar_horizontal_fov_range"][0]) + abs(cfg["lidar_horizontal_fov_range"][1]))/cfg["lidar_horizontal_res"])
+    goal_only_critic = cfg["goal_only_critic"]
     observation_space = {
-    "lidar": [lidar_history_length,int(2250/(int(lidar_skip_rays+1)))], # TODO get lidar raycount from sensor config
-    "sensor": 3,
-    "goal": 4,
+        "lidar": [lidar_history_length,int(num_rays/(int(lidar_skip_rays+1)))], # TODO get lidar raycount from sensor config
+        "sensor": 3 if goal_only_critic else 7,
+        "goal": 4 if goal_only_critic else 0,
     }
     state_space = 0 # only used for RNNs, defined to avoid warning
 
-    num_envs = 1024
-    env_spacing = 10.0
+    num_envs = cfg["num_envs"]
+    env_spacing = cfg["env_spacing"]
 
-    fin_dist = 0.10     # 10 cm
-    fin_angle = 0.085   # approx 5 degrees
+    fin_dist = cfg["fin_dist"]     # 10 cm
+    fin_angle = cfg["fin_angle"]   # approx 5 degrees in radians
 
     # kinematics from https://research.ijcaonline.org/volume113/number3/pxc3901586.pdf
-    wheel_radius = 0.05  # radius of the wheel
-    wheel_lx = 0.1  # distance between wheels and the base in x
-    wheel_ly = 0.1  # distance between wheels and the base in y
+    wheel_radius = cfg["wheel_radius"]  # radius of the wheel
+    wheel_lx = cfg["wheel_lx"]  # distance between wheels and the base in x
+    wheel_ly = cfg["wheel_ly"]  # distance between wheels and the base in y
     dist = wheel_lx + wheel_ly
 
     # simulation
@@ -71,23 +82,17 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
         render_interval=decimation,
         disable_contact_processing=True,
         physics_material=sim_utils.RigidBodyMaterialCfg(
-            # friction_combine_mode="average",
-            # restitution_combine_mode="average",
-            # static_friction=0.5, # TODO check friction
-            # dynamic_friction=0.5,
-            # restitution=0.0,
         ),
-        # TODO flag for when video is recorded
-        # TODO only for visualization, reduces performance
-        # render=sim_utils.RenderCfg(
-        #     samples_per_pixel=2,
-        #     enable_ambient_occlusion=True,
-        #     dlss_mode=2,
-        #     enable_reflections=True,
-        #     enable_translucency=True,
-        #     enable_global_illumination=True,
-        # )
     )
+    # this will be set in the env script when not training for nicer visualization
+    debug_render_cfg = sim_utils.RenderCfg(
+            samples_per_pixel=2,
+            enable_ambient_occlusion=True,
+            dlss_mode=2,
+            enable_reflections=True,
+            enable_translucency=True,
+            enable_global_illumination=True,
+        )
     terrain = TerrainImporterCfg(
         prim_path="/World/ground",
         terrain_type="plane",
@@ -146,8 +151,8 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
     for i in range(num_objects):
         object_prim_path = f"/World/envs/env_.*/Object_{i}"
         # cfg = random.choice(objects) # TODO better use torch? so seed is set?
-        cfg = objects[i%len(objects)]
-        objects_cfgs.append(cfg.replace(prim_path=object_prim_path))
+        rigid_object_cfg = objects[i%len(objects)]
+        objects_cfgs.append(rigid_object_cfg.replace(prim_path=object_prim_path))
         lidar_prim_paths.append(object_prim_path)
     
     #lidar config
@@ -155,14 +160,14 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
         prim_path="/World/envs/env_.*/Robot/base_link",
         mesh_prim_paths=lidar_prim_paths,
         # TODO skip rays cfg
-        pattern_cfg=patterns.LidarPatternCfg(channels=1, vertical_fov_range=(0.0, 0.0), horizontal_fov_range=(-135.0, 135.0), horizontal_res=0.12 * int(lidar_skip_rays + 1)),
+        pattern_cfg=patterns.LidarPatternCfg(channels=1, vertical_fov_range=(0.0, 0.0), horizontal_fov_range=tuple(cfg["lidar_horizontal_fov_range"]), horizontal_res=cfg["lidar_horizontal_res"] * int(lidar_skip_rays + 1)),
         offset=OffsetCfg(pos=(0.1, 0.0, 0.083)),
         attach_yaw_only=True,
-        debug_vis=False, # TODO flag for when video is recorded
+        debug_vis=True, # TODO flag for when video is recorded
         # TODO add noise back when we learned somthing without
-        # drift_range=(-0.05, 0.05), # TODO check drift range
-        # accuracy=0.05,
-        max_distance=5.0
+        drift_range=tuple(cfg["lidar_drift_range"]),
+        accuracy=cfg["lidar_accuracy"],
+        max_distance=cfg["lidar_max_distance"],
     )
 
     # contact sensor config
@@ -175,3 +180,11 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
 
     # TODO reward sclaes
     # reward scales
+    delta_goal_dist_lin_scale = cfg["delta_goal_dist_lin_scale"]
+    object_dist_penalty_exp_scale = cfg["object_dist_penalty_exp_scale"]
+    # action_rate_scale = cfg["action_rate_scale"]
+    goal_dist_lin_scale = cfg["goal_dist_lin_scale"]
+    goal_angle_lin_scale = cfg["goal_angle_lin_scale"]
+    # goal_vel_lin_scale = cfg["goal_vel_lin_scale"]
+    finished_scale = cfg["finished_scale"]
+    contacts_scale = cfg["contacts_scale"]

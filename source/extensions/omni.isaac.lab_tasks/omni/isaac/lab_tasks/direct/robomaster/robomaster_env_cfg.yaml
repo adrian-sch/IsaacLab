@@ -1,0 +1,54 @@
+params:
+  # env
+  episode_length_s: 20.0
+  simulation_rate: 120 # in Hz
+  inference_rate: 10 # in Hz
+
+  action_scale_x_pos: 2.0
+  action_scale_x_neg: 0.5
+  action_scale_y: 1.25
+  action_scale_ang: 3.14
+  
+  num_objects: 4
+
+  shelf_width: 0.6
+  shelf_length: 0.25
+  shelf_scale: 2.0               # starting scale of shelf, shrink by x every y episodes untill 1
+  shelf_shrink_epidoes: 25       # shrink shelf every y episodes
+  horizon_length: 24             # steps per episode, needed for calulation of steps per episode therfore needs to be the same as in agent config
+  shelf_shrink_by: 0.1           # shrink self by x: shelf_scale -= shelf_shrink_by
+  
+  lidar_horizontal_fov_range: [-135, 135] # in degrees
+  lidar_horizontal_res: 0.12              # in degrees
+  lidar_drift_range: [-0.00, 0.00]        # in meters
+  lidar_accuracy: 0.00                    # in meters
+  # TODO add noise back to lidar when it is working wihout
+  # lidar_drift_range: [-0.05, 0.05]        # in meters
+  # lidar_accuracy: 0.05                    # in meters
+  lidar_max_distance: 5.0                 # in meters
+
+  lidar_skip_rays: 1                      # reduces the amount of rays to simulate a lower resolution and reduce computation, when 0 all rays are used
+  lidar_history_length: 3                 # number of lidar readings to stack for input to the network
+
+  goal_only_critic: false # whether to give the goal positon only to the critic as an observation 
+
+  num_envs: 1024
+  env_spacing: 10.0
+
+  fin_dist: 0.10     # 10 cm
+  fin_angle: 0.085   # approx 5 degrees in radians
+
+  # kinematics from https://research.ijcaonline.org/volume113/number3/pxc3901586.pdf
+  wheel_radius: 0.05  # radius of the wheel
+  wheel_lx: 0.1  # distance between wheels and the base in x
+  wheel_ly: 0.1  # distance between wheels and the base in y
+
+  # reward scaling
+  delta_goal_dist_lin_scale: 10.0
+  object_dist_penalty_exp_scale: -0.0005
+  # action_rate_scale: -0.01
+  goal_dist_lin_scale: 0.5
+  goal_angle_lin_scale: 0.2
+  # goal_vel_lin_scale: -0.025
+  finished_scale: 10000.0
+  contacts_scale: -10.0

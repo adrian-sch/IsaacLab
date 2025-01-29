@@ -4,6 +4,8 @@ params:
   # environment wrapper clipping
   env:
     clip_actions: 1.0
+    gt_obs: False
+    use_lidar: True
 
   algo:
     name: a2c_continuous
@@ -12,29 +14,40 @@ params:
     name: continuous_a2c_logstd
 
   network:
-    # name: testnet
-    name: actor_critic
-    separate: False
-    space:
-      continuous:
-        mu_activation: None
-        sigma_activation: None
 
-        mu_init:
-          name: default
-        sigma_init:
-          name: const_initializer
-          val: 0
-        fixed_sigma: True
+    name: christian_net
+    # separate: true
+    fixed_sigma: true
+
+    # action_limiter:
+    #   begin: 0.0
+    #   end: 1.0
+
+    cnn:
+      type: "impala1d"
+      activation: "relu"
+      min_pooling: 5
+      convs:
+        - filters: 24
+          kernel_size: 7
+          stride: 3
+          padding: 0
+        - filters: 16
+          kernel_size: 5
+          stride: 2
+          padding: 0
+
     mlp:
-      units: [128, 128, 128]
-      activation: elu
-      d2rl: False
+      activation: "relu"
+      units: [256]
 
-      initializer:
-        name: default
-      regularizer:
-        name: None
+    mlp_sensor:
+      activation: "relu"
+      units: [96]
+
+    mlp_lidar:
+      activation: "relu"
+      units: [256]
 
   load_checkpoint: False # flag which sets whether to load the checkpoint
   load_path: '' # path to the checkpoint to load
@@ -52,7 +65,8 @@ params:
     value_bootstrap: True
     num_actors: -1  # configured from the script (based on num_envs)
     reward_shaper:
-      scale_value: 0.6
+      scale_value: 1.0
+      # scale_value: 0.6
     normalize_advantage: True
     gamma: 0.99
     tau: 0.95
@@ -60,23 +74,24 @@ params:
     lr_schedule: adaptive
     schedule_type: legacy
     kl_threshold: 0.01
-    score_to_win: 20000000
-    max_epochs: 50000000
-    save_best_after: 500
-    save_frequency: 250
+    score_to_win: 10000
+    max_epochs: 5000000
+    save_best_after: 50
+    save_frequency: 100
     grad_norm: 1.0
     entropy_coef: 0.005
     truncate_grads: True
     e_clip: 0.2
 
     # for 32 and 1024 envs
-    horizon_length: 16 # self.batch_size % self.minibatch_size == 0. batch_size is computed as horizon_length * num_envs
-    minibatch_size: 512
+    # horizon_length: 16 # self.batch_size % self.minibatch_size == 0. batch_size is computed as horizon_length * num_envs
+    # minibatch_size: 512
 
     # for 1024 envs
-    # horizon_length: 16
-    # minibatch_size: 16384
+    horizon_length: 24 # batch_size = 24576
+    minibatch_size: 6144 # 24576 / 6144 = 4
 
+    # for 4096 envs
     # horizon_length: 24
     # minibatch_size: 24576
     mini_epochs: 5
