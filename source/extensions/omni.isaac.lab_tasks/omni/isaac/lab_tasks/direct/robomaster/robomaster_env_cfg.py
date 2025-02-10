@@ -60,8 +60,10 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
     observation_space = {
         "lidar": [lidar_history_length,int(num_rays/(int(lidar_skip_rays+1)))], # TODO get lidar raycount from sensor config
         "sensor": 3 if goal_only_critic else 7,
-        "goal": 4 if goal_only_critic else 0,
+        # "goal": 4 if goal_only_critic else 0,
     }
+    if goal_only_critic:
+        observation_space["goal"] = 4
     state_space = 0 # only used for RNNs, defined to avoid warning
 
     num_envs = cfg["num_envs"]

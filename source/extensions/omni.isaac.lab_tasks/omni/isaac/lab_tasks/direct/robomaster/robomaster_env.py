@@ -132,7 +132,6 @@ class RobomasterEnv(DirectRLEnv):
 
 
     def _pre_physics_step(self, actions: torch.Tensor):
-        self._cur_step += 1
         self._actions = actions.clone()
 
         actions[:, 0] = torch.where(actions[:, 0] > 0, actions[:, 0] * self.cfg.action_scale_x_pos , actions[:, 0] * self.cfg.action_scale_x_neg)
@@ -199,14 +198,14 @@ class RobomasterEnv(DirectRLEnv):
                     dim=-1,
                 ),
         }
-        if not self.cfg.goal_only_critic:
+        if self.cfg.goal_only_critic:
             obs["goal"] = torch.cat(
                 [
                     tensor
                     for tensor in (
                         rel_goal_pos_rot,
                         self._dist_to_goal.unsqueeze(1),
-                        self._angle_error_goal,
+                        self._angle_error_goal.unsqueeze(1),
                     )
                     if tensor is not None
                 ],
@@ -221,7 +220,7 @@ class RobomasterEnv(DirectRLEnv):
                         obs["sensor"],
                         rel_goal_pos_rot,
                         self._dist_to_goal.unsqueeze(1),
-                        self._angle_error_goal,
+                        self._angle_error_goal.unsqueeze(1),
                     )
                     if tensor is not None
                 ],
@@ -233,11 +232,7 @@ class RobomasterEnv(DirectRLEnv):
 
     def _get_rewards(self) -> torch.Tensor:        
 
-        if self._dist_to_goal_buf is None:
-            self._dist_to_goal_buf = self._dist_to_goal
         delta_goal_dist_lin = (self._dist_to_goal_buf - self._dist_to_goal)
-        
-        # reward += (5.0 - dist_to_goal) * 1.0
         self._dist_to_goal_buf = self._dist_to_goal
 
         # penalty for change in action for smoother actions

@@ -83,17 +83,26 @@ params:
     truncate_grads: True
     e_clip: 0.2
 
-    # for 32 and 1024 envs
+    # for 32 envs for testing
     # horizon_length: 16 # self.batch_size % self.minibatch_size == 0. batch_size is computed as horizon_length * num_envs
     # minibatch_size: 512
+
+    # for 512 envs
+    # horizon_length: 24 # batch_size = 12288
+    # minibatch_size: 3072 # 12288 / 3072 = 4
 
     # for 1024 envs
     horizon_length: 24 # batch_size = 24576
     minibatch_size: 6144 # 24576 / 6144 = 4
 
+    # for 2048 envs
+    # horizon_length: 24 # batch_size = 49152
+    # minibatch_size: 12288 # 49152 / 12288 = 4
+
     # for 4096 envs
-    # horizon_length: 24
-    # minibatch_size: 24576
+    # horizon_length: 24 # batch_size = 98304
+    # minibatch_size: 24576 # 98304 / 24576 = 4
+
     mini_epochs: 5
     critic_coef: 2.0
     clip_value: True
