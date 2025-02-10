@@ -8,7 +8,7 @@ from omni.isaac.lab.assets import ArticulationCfg
 from omni.isaac.lab.envs import DirectRLEnvCfg, ViewerCfg
 from omni.isaac.lab.scene import InteractiveSceneCfg
 from omni.isaac.lab.sensors import ContactSensorCfg, RayCasterCfg, patterns, OffsetCfg
-from omni.isaac.lab.sim import SimulationCfg
+from omni.isaac.lab.sim import SimulationCfg, PhysxCfg
 from omni.isaac.lab.assets import RigidObjectCfg
 from omni.isaac.lab.terrains import TerrainImporterCfg
 from omni.isaac.lab.markers import VisualizationMarkersCfg
@@ -56,6 +56,11 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
     action_space = 3
 
     num_rays = int((abs(cfg["lidar_horizontal_fov_range"][0]) + abs(cfg["lidar_horizontal_fov_range"][1]))/cfg["lidar_horizontal_res"])
+    
+    # If the horizontal field of view is 360 degrees, exclude the last point to avoid overlap
+    if abs(abs(cfg["lidar_horizontal_fov_range"][0] - cfg["lidar_horizontal_fov_range"][1]) - 360.0) < 1e-6:
+        num_rays -= 1
+    
     goal_only_critic = cfg["goal_only_critic"]
     observation_space = {
         "lidar": [lidar_history_length,int(num_rays/(int(lidar_skip_rays+1)))], # TODO get lidar raycount from sensor config
@@ -69,8 +74,11 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
     num_envs = cfg["num_envs"]
     env_spacing = cfg["env_spacing"]
 
-    fin_dist = cfg["fin_dist"]     # 10 cm
-    fin_angle = cfg["fin_angle"]   # approx 5 degrees in radians
+    fin_dist = cfg["fin_dist"]
+    fin_angle = cfg["fin_angle"]
+    fin_lin_vel = cfg["fin_lin_vel"]
+    fin_ang_vel = cfg["fin_ang_vel"]
+    fin_duration = cfg["fin_duration"]
 
     # kinematics from https://research.ijcaonline.org/volume113/number3/pxc3901586.pdf
     wheel_radius = cfg["wheel_radius"]  # radius of the wheel
@@ -188,10 +196,12 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
     # TODO reward sclaes
     # reward scales
     delta_goal_dist_lin_scale = cfg["delta_goal_dist_lin_scale"]
+    delta_goal_angel_lin_scale = cfg["delta_goal_angel_lin_scale"]
     object_dist_penalty_exp_scale = cfg["object_dist_penalty_exp_scale"]
-    # action_rate_scale = cfg["action_rate_scale"]
+    vel_lin_scale = cfg["vel_lin_scale"]
+    vel_ang_scale = cfg["vel_ang_scale"]
+    action_rate_scale = cfg["action_rate_scale"]
     goal_dist_lin_scale = cfg["goal_dist_lin_scale"]
     goal_angle_lin_scale = cfg["goal_angle_lin_scale"]
-    # goal_vel_lin_scale = cfg["goal_vel_lin_scale"]
     finished_scale = cfg["finished_scale"]
     contacts_scale = cfg["contacts_scale"]

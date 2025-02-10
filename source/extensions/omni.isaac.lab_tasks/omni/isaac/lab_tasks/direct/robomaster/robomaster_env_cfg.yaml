@@ -14,11 +14,12 @@ params:
   shelf_width: 0.6
   shelf_length: 0.25
   shelf_scale: 2.0               # starting scale of shelf, shrink by x every y episodes untill 1
-  shelf_shrink_epidoes: 25       # shrink shelf every y episodes
+  shelf_shrink_epidoes: 5        # shrink shelf every y episodes
   horizon_length: 24             # steps per episode, needed for calulation of steps per episode therfore needs to be the same as in agent config
-  shelf_shrink_by: 0.1           # shrink self by x: shelf_scale -= shelf_shrink_by
+  shelf_shrink_by: 0.05          # shrink self by x: shelf_scale -= shelf_shrink_by
   
-  lidar_horizontal_fov_range: [-135, 135] # in degrees
+  # lidar_horizontal_fov_range: [-135, 135] # in degrees
+  lidar_horizontal_fov_range: [-180, 180] # in degrees
   lidar_horizontal_res: 0.12              # in degrees
   lidar_drift_range: [-0.00, 0.00]        # in meters
   lidar_accuracy: 0.00                    # in meters
@@ -30,13 +31,18 @@ params:
   lidar_skip_rays: 1                      # reduces the amount of rays to simulate a lower resolution and reduce computation, when 0 all rays are used
   lidar_history_length: 3                 # number of lidar readings to stack for input to the network
 
-  goal_only_critic: false # whether to give the goal positon only to the critic as an observation 
+  goal_only_critic: true # whether to give the goal positon only to the critic as an observation 
 
   num_envs: 1024
   env_spacing: 10.0
 
-  fin_dist: 0.10     # 10 cm
-  fin_angle: 0.085   # approx 5 degrees in radians
+  # fin_dist: 0.10     # 10 cm
+  # fin_angle: 0.085   # approx 5 degrees in radians
+  fin_dist: 0.06    # in cm
+  fin_angle: 0.05   # in radians
+  fin_lin_vel: 0.1  # in m/s
+  fin_ang_vel: 0.5  # in rad/s
+  fin_duration: 0.5 # in seconds
 
   # kinematics from https://research.ijcaonline.org/volume113/number3/pxc3901586.pdf
   wheel_radius: 0.05  # radius of the wheel
@@ -45,10 +51,12 @@ params:
 
   # reward scaling
   delta_goal_dist_lin_scale: 10.0
+  delta_goal_angel_lin_scale: 1.0
   object_dist_penalty_exp_scale: -0.0005
-  # action_rate_scale: -0.01
+  vel_lin_scale: -0.1
+  vel_ang_scale: -0.005
+  action_rate_scale: -0.001
   goal_dist_lin_scale: 0.5
   goal_angle_lin_scale: 0.2
-  # goal_vel_lin_scale: -0.025
-  finished_scale: 10000.0
+  finished_scale: 500.0
   contacts_scale: -10.0
