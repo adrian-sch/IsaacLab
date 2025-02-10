@@ -15,27 +15,36 @@ from omni.isaac.lab.envs import DirectRLEnv
 from omni.isaac.lab.sensors import ContactSensor, RayCaster
 
 from .robomaster_env_cfg import RobomasterEnvCfg
-from omni.isaac.lab.utils.io import dump_pickle, dump_yaml
+from omni.isaac.lab.utils.io import dump_pickle, dump_yaml, load_pickle, load_yaml
 
 
 class RobomasterEnv(DirectRLEnv):
     cfg: RobomasterEnvCfg
 
     def __init__(self, cfg: RobomasterEnvCfg, render_mode: str | None = None, **kwargs):
-        if kwargs.get("train", False):
+        if kwargs.get("train", False): # training flag set
             # dump the configuration into log-directory when training
             dump_yaml(os.path.join(kwargs.get("log_root_path", ""), kwargs.get("log_dir", ""), "params", "robomaser_env.yaml"), cfg.cfg_full)
+            dump_pickle(os.path.join(kwargs.get("log_root_path", ""), kwargs.get("log_dir", ""), "params", "robomaser_env.pkl"), cfg)
         else:
             # only do scaling when training
-            self.cfg.shelf_scale = 1.0
+            # self.shelf_scale = 1.0
+            cfg.shelf_scale = 1.0
 
-        if kwargs.get("debug", False):
-            print(f"RobomasterEnv: {self.cfg}")
-            self.cfg.lidar_scanner_cfg.debug_vis = True
-            self.cfg.contact_sensor.debug_vis = True
+        if kwargs.get("debug", False): # debug flag set
+            cfg.lidar_scanner_cfg.debug_vis = True
+            cfg.contact_sensor.debug_vis = True
 
             # set nicer render settings
-            self.cfg.sim.render = cfg.debug_render_cfg
+            cfg.sim.render = cfg.debug_render_cfg
+            
+        
+        if kwargs.get("load_checkpoint", False):
+            # load the configuration from the checkpoint
+            cfg = load_pickle(os.path.join(kwargs.get("checkpoint"), "params", "robomaser_env.pkl"))
+            print(f"Loaded RobomasterEnv from checkpoint")
+
+        # TODO load enf cfg from checkpoint if available
 
         super().__init__(cfg, render_mode, **kwargs)
 

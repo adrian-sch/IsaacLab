@@ -96,6 +96,8 @@ def main():
     env_kwargs = {
         "train": False,
         "debug": args_cli.debug_viz,
+        "load_checkpoint": False,
+        "checkpoint": "/".join(resume_path.split("/")[:-2]),
     }
     # create isaac environment
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None, **env_kwargs)

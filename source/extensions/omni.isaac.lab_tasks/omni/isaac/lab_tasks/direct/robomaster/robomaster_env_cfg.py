@@ -29,7 +29,7 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
     # TODO flag for when video is recorded
     viewer: ViewerCfg = ViewerCfg(
         eye=(30.0, 0.0, 7.5),
-        lookat=(10.0, 0.0, 0.0),
+        lookat=(17.5, 0.0, 0.0),
         resolution=(1920, 1080),
     )
     
@@ -83,6 +83,11 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
         disable_contact_processing=True,
         physics_material=sim_utils.RigidBodyMaterialCfg(
         ),
+        physx=PhysxCfg(
+            gpu_max_rigid_patch_count= 2 ** 20,
+            gpu_temp_buffer_capacity= 2 ** 28,
+            gpu_heap_capacity= 2 ** 30,
+        )
     )
     # this will be set in the env script when not training for nicer visualization
     debug_render_cfg = sim_utils.RenderCfg(
@@ -163,7 +168,7 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
         pattern_cfg=patterns.LidarPatternCfg(channels=1, vertical_fov_range=(0.0, 0.0), horizontal_fov_range=tuple(cfg["lidar_horizontal_fov_range"]), horizontal_res=cfg["lidar_horizontal_res"] * int(lidar_skip_rays + 1)),
         offset=OffsetCfg(pos=(0.1, 0.0, 0.083)),
         attach_yaw_only=True,
-        debug_vis=True, # TODO flag for when video is recorded
+        debug_vis=False, # TODO flag for when video is recorded
         # TODO add noise back when we learned somthing without
         drift_range=tuple(cfg["lidar_drift_range"]),
         accuracy=cfg["lidar_accuracy"],
