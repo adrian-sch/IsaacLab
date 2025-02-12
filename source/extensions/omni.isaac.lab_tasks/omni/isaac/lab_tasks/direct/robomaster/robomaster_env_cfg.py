@@ -203,5 +203,6 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
     action_rate_scale = cfg["action_rate_scale"]
     goal_dist_lin_scale = cfg["goal_dist_lin_scale"]
     goal_angle_lin_scale = cfg["goal_angle_lin_scale"]
+    at_goal_scale = cfg["at_goal_scale"]
     finished_scale = cfg["finished_scale"]
     contacts_scale = cfg["contacts_scale"]

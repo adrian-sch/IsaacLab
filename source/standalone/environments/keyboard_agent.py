@@ -45,8 +45,13 @@ def main():
     env_cfg = parse_env_cfg(
         args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs, use_fabric=not args_cli.disable_fabric
     )
+
+    env_kwargs = {
+        "train": False,
+        "debug": True,
+    }
     # create environment
-    env = gym.make(args_cli.task, cfg=env_cfg)
+    env = gym.make(args_cli.task, cfg=env_cfg, **env_kwargs)
 
     # print info (this is vectorized environment)
     print(f"[INFO]: Gym observation space: {env.observation_space}")
@@ -95,7 +100,6 @@ def main():
         except AttributeError:
             pass
         # print(f"Action value updated to: {action_value}")
-    # register keyboard events
     # Register keyboard events
     listener = keyboard.Listener(on_press=on_press, on_release=on_release)
     listener.start()

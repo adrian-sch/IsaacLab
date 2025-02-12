@@ -14,7 +14,7 @@ params:
   shelf_width: 0.6
   shelf_length: 0.25
   shelf_scale: 2.0               # starting scale of shelf, shrink by x every y episodes untill 1
-  shelf_shrink_epidoes: 5        # shrink shelf every y episodes
+  shelf_shrink_epidoes: 10       # shrink shelf every y episodes
   horizon_length: 24             # steps per episode, needed for calulation of steps per episode therfore needs to be the same as in agent config
   shelf_shrink_by: 0.05          # shrink self by x: shelf_scale -= shelf_shrink_by
   
@@ -42,7 +42,7 @@ params:
   fin_angle: 0.05   # in radians
   fin_lin_vel: 0.1  # in m/s
   fin_ang_vel: 0.5  # in rad/s
-  fin_duration: 0.5 # in seconds
+  fin_duration: 0.0 # in seconds
 
   # kinematics from https://research.ijcaonline.org/volume113/number3/pxc3901586.pdf
   wheel_radius: 0.05  # radius of the wheel
@@ -58,5 +58,6 @@ params:
   action_rate_scale: -0.001
   goal_dist_lin_scale: 0.5
   goal_angle_lin_scale: 0.2
+  at_goal_scale: 1.0
   finished_scale: 500.0
   contacts_scale: -10.0

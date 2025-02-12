@@ -61,6 +61,7 @@ class RobomasterEnv(DirectRLEnv):
             ],
             device=self.device)
         
+        # init state buffers
         self._dist_to_goal = torch.zeros(self.num_envs, device=self.device)
         self._dist_to_goal_buf = torch.zeros(self.num_envs, device=self.device)
         self._angle_error_goal = torch.zeros(self.num_envs, device=self.device)
@@ -68,11 +69,12 @@ class RobomasterEnv(DirectRLEnv):
         self._dist_to_objects = torch.zeros(self.num_envs, self.cfg.num_objects, device=self.device)
         self._lidar_buf = torch.zeros(self.num_envs, *tuple(self.cfg.observation_space['lidar']), device=self.device)
         self._is_contact = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        self._at_goal = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         self._is_finished = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         self._is_finished_steps = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         self.goal_pose = torch.zeros(self.num_envs, 7, device=self.device)
         self.shelf_scale = self.cfg.shelf_scale
-        self.fin_duration_steps = math.ceil(self.cfg.fin_duration / (self.cfg.sim.dt * self.cfg.decimation)) # in steps
+        self.fin_duration_steps = max(math.ceil(self.cfg.fin_duration / (self.cfg.sim.dt * self.cfg.decimation)), 1) # in steps
         
         self._finished = 0
         self._contact = 0
@@ -82,7 +84,7 @@ class RobomasterEnv(DirectRLEnv):
 
 
         # debug
-        self.debug = kwargs.get("debug", False)
+        self.debug = not kwargs.get("train", False)
 
         # Logging
         self._episode_sums = {
@@ -94,8 +96,7 @@ class RobomasterEnv(DirectRLEnv):
                 "lin_vel_penalty",
                 "ang_vel_penalty",
                 "action_rate",
-                # "goal_dist_lin",
-                # "goal_angle_lin",
+                "at_goal",
                 "finished",
                 "contacts",
             ]
@@ -249,7 +250,7 @@ class RobomasterEnv(DirectRLEnv):
                                   self._angle_error_goal,                                                                           # use the angle
                                   (-torch.sign(self._angle_error_goal)) * (math.pi - torch.abs(self._angle_error_goal)))  # else rotate 180 degrees
         
-        delta_goal_angel_lin = (self._angle_error_goal_buf - angle_error)
+        delta_goal_angel_lin = (torch.abs(self._angle_error_goal_buf) - torch.abs(angle_error))
         self._angle_error_goal_buf = angle_error
 
         # penalty for change in action for smoother actions
@@ -264,30 +265,20 @@ class RobomasterEnv(DirectRLEnv):
 
         lin_velocity = torch.norm(self._robot.data.root_lin_vel_w, dim=-1)
         ang_velocity = torch.abs(self._robot.data.root_ang_vel_w[:, 2])
-        
-        # goal_dist_lin = torch.max(1-self._dist_to_goal, torch.zeros_like(self._dist_to_goal))
-        
-        # goal_angle_lin = torch.where(self._dist_to_goal < 1.0, 
-        #                              1 - torch.abs(angle_error/(math.pi/2)),            
-        #                              torch.zeros_like(angle_error)) 
- 
-        
-        # print(f"Goal distance: {self._dist_to_goal[0]}")
-        # print(f"Goal angle: {angle_error[0]}")
-        # print(f"Goal velocity: {velocity[0]}")
 
-        # TODO get velocity threshold from cfg
-        self._is_finished = torch.logical_and(
-            torch.logical_and(self._dist_to_goal < self.cfg.fin_dist, abs(angle_error) < self.cfg.fin_angle),
-            lin_velocity < 0.1
+        # get finished robos
+        self._at_goal = torch.logical_and(
+            torch.logical_and(self._dist_to_goal < self.cfg.fin_dist, torch.abs(angle_error) < self.cfg.fin_angle),
+            torch.logical_and(lin_velocity < self.cfg.fin_lin_vel, ang_velocity < self.cfg.fin_ang_vel)
         )
+        self._is_finished_steps = torch.where(self._at_goal, self._is_finished_steps + 1, torch.zeros_like(self._is_finished_steps))
+        self._is_finished = torch.where(self._is_finished_steps >= self.fin_duration_steps, torch.ones_like(self._is_finished), torch.zeros_like(self._is_finished))
         
         # check for contacts
         self._is_contact = (
             torch.max(torch.norm(self._contact_sensor.data.net_forces_w, dim=-1), dim=1)[0] > 0.0
         )
 
-        # TODO move scaling to cfg
         rewards = {
             "delta_goal_dist_lin": delta_goal_dist_lin * self.cfg.delta_goal_dist_lin_scale * self.step_dt,
             "delta_goal_angle_lin": delta_goal_angel_lin * self.cfg.delta_goal_angel_lin_scale * self.step_dt,
@@ -295,8 +286,7 @@ class RobomasterEnv(DirectRLEnv):
             "lin_vel_penalty": lin_velocity * self.cfg.vel_lin_scale * self.step_dt,
             "ang_vel_penalty": ang_velocity * self.cfg.vel_ang_scale * self.step_dt,
             "action_rate": action_rate * self.cfg.action_rate_scale * self.step_dt,
-            # "goal_dist_lin": goal_dist_lin * self.cfg.goal_dist_lin_scale * self.step_dt,
-            # "goal_angle_lin": goal_angle_lin * self.cfg.goal_angle_lin_scale * self.step_dt,
+            "at_goal": self._at_goal * self.cfg.at_goal_scale * self.step_dt,
             "finished": self._is_finished * self.cfg.finished_scale * self.step_dt,
             "contacts": self._is_contact * self.cfg.contacts_scale * self.step_dt,
         }
@@ -337,10 +327,8 @@ class RobomasterEnv(DirectRLEnv):
         self._contact = torch.sum(self._is_contact)
 
         # check if robot reached goal and is standing still for long enough
-        self._is_finished_steps = torch.where(self._is_finished, self._is_finished_steps + 1, torch.zeros_like(self._is_finished_steps))
-        died = torch.where(self._is_finished_steps > self.fin_duration_steps, ones, died)
-        # died = torch.where(self._is_finished, ones, died)
-        self._finished = torch.sum(self._is_finished) # TODO technically not correct, because we check for standing still
+        died = torch.where(self._is_finished, ones, died)
+        self._finished = torch.sum(self._is_finished)
 
         # reset flying robots
         # TODO still needed with contact sensor?
@@ -349,10 +337,7 @@ class RobomasterEnv(DirectRLEnv):
 
         # TODO is this the best position for this?
         # update shelf scale
-        # print(f"Current step: {self.common_step_counter}")
-        # print(f"Shelf scale: {self.shelf_scale}")
         if (self.common_step_counter % self.cfg.shelf_shrink_steps == 0):
-
             self.shelf_scale = max(1.0, self.shelf_scale - self.cfg.shelf_shrink_by)
             print(f"Shrinking shelf, new shelf scale: {self.shelf_scale}")
 
