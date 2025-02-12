@@ -235,7 +235,7 @@ class RobomasterEnv(DirectRLEnv):
                 ],
                 dim=-1,
             )
-
+            
         observations = {"policy": obs}
         return observations
 

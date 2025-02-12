@@ -25,7 +25,7 @@ params:
   lidar_accuracy: 0.00                    # in meters
   # TODO add noise back to lidar when it is working wihout
   # lidar_drift_range: [-0.05, 0.05]        # in meters
-  # lidar_accuracy: 0.05                    # in meters
+  lidar_accuracy: 0.05                    # in meters
   lidar_max_distance: 5.0                 # in meters
 
   lidar_skip_rays: 1                      # reduces the amount of rays to simulate a lower resolution and reduce computation, when 0 all rays are used
