@@ -176,7 +176,7 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
         mesh_prim_paths=lidar_prim_paths,
         # TODO skip rays cfg
         pattern_cfg=patterns.LidarPatternCfg(channels=1, vertical_fov_range=(0.0, 0.0), horizontal_fov_range=tuple(cfg["lidar_horizontal_fov_range"]), horizontal_res=cfg["lidar_horizontal_res"] * int(lidar_skip_rays + 1)),
-        offset=OffsetCfg(pos=(0.1, 0.0, 0.083)),
+        offset=OffsetCfg(pos=(0.0, 0.0, 0.211)),
         attach_yaw_only=True,
         debug_vis=False, # TODO flag for when video is recorded
         # TODO add noise back when we learned somthing without
