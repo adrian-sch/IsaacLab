@@ -1,11 +1,11 @@
 from omni.isaac.lab.app import AppLauncher
 
 # launch omniverse app
-app_launcher = AppLauncher()
+app_launcher = AppLauncher(headless=True)
 simulation_app = app_launcher.app
 
 from omni.isaac.lab.utils.io import load_yaml
-from omni.isaac.lab_tasks.direct.robomaster.network.actor_critic_network import ActorCriticNetwork, ActorCriticVizualization
+from omni.isaac.lab_tasks.direct.robomaster.network.actor_critic_network import ActorCriticNetwork, ActorCriticInference
 
 import os
 import torch
@@ -25,6 +25,8 @@ net_cfg = agent_cfg["params"]['network']
 env_cfg_path = os.path.join(args.path, 'params', 'env.yaml')
 env_cfg = load_yaml(env_cfg_path)
 
+weight_path = os.path.join(args.path, 'nn', 'robomaster_direct.pth')
+
 input_shape = env_cfg['observation_space']
 
 for key, value in input_shape.items():
@@ -38,20 +40,26 @@ kwargs = {
         'input_shape': env_cfg['observation_space']
 }
 
-original_network = ActorCriticNetwork(net_cfg, **kwargs)
-network = ActorCriticVizualization(original_network)
+loaded_model = torch.load(weight_path)
+
+original_network: torch.nn.Module = ActorCriticNetwork(net_cfg, **kwargs)
+original_network.load_state_dict(loaded_model['model'], strict=False)
+network = ActorCriticInference(original_network)
+
 
 input = {}
 
 for key, value in input_shape.items():
-        input[key] = torch.randn(1, *value)
+        input[key] = torch.randn(1, *value, device='cuda:0')
 
-input = {'obs': input}
+# input = (input['lidar'], input['sensor'])
 
-network(input)
+network(input['lidar'], input['sensor'])
 
-onnx_programm = torch.onnx.dynamo_export(network, input)
+print(network(input['lidar'], input['sensor']))
 
-onnx_programm.save(os.path.join(args.path, 'model.onnx'))
-print(f"Model saved to {os.path.join(args.path, 'model.onnx')}")
+onnx_programm = torch.onnx.dynamo_export(network, input['lidar'], input['sensor'])
+
+onnx_programm.save(os.path.join(args.path, 'inference_model.onnx'))
+print(f"Model saved to {os.path.join(args.path, 'inference_model.onnx')}")
 
