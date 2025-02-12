@@ -193,3 +193,13 @@ class ActorCriticInference(nn.Module):
         action = torch.tanh(self._mu(out))
 
         return action
+    
+# wrappter for exporting for Netron without None in return
+class ActorCriticVizualization(nn.Module):
+    def __init__(self, network: ActorCriticNetwork):
+        nn.Module.__init__(self)
+        self.network = network
+
+    def forward(self, observation):
+        mu, sigma, value, _ = self.network.forward(observation)
+        return mu, sigma, value
