@@ -11,6 +11,7 @@ import os
 import torch
 import argparse
 import pickle
+import numpy
 
 # Set up argument parser
 parser = argparse.ArgumentParser(description='Load a neural network from a log directory.')
@@ -50,10 +51,19 @@ kwargs = {
         'input_shape': env_cfg['observation_space']
 }
 
+
 loaded_model = torch.load(weight_path)
+state_dict = loaded_model["model"]  # Extract only model weights
+
+# Remove potential prefixes if needed
+new_state_dict = {k.replace("a2c_network.", ""): v for k, v in state_dict.items()}
+
+
+print(loaded_model["model"].keys())
+print(new_state_dict.keys())
 
 original_network: torch.nn.Module = ActorCriticNetwork(net_cfg, **kwargs)
-original_network.load_state_dict(loaded_model['model'], strict=False)
+original_network.load_state_dict(new_state_dict, strict=False)
 network = ActorCriticInference(original_network)
 
 print(input_shape)
@@ -73,7 +83,10 @@ sample_input_tensor = {
 #         print("input size ", key, input[key].size())
 #         print("sample size ", key, sample_input_tensor[key].size())
 
-pytorch_out = network(sample_input_tensor['lidar'], sample_input_tensor['sensor'])
+network.eval()
+
+with torch.no_grad():
+        pytorch_out = network(sample_input_tensor['lidar'], sample_input_tensor['sensor'])
 
 onnx_programm = torch.onnx.dynamo_export(network, sample_input_tensor['lidar'], sample_input_tensor['sensor'])
 

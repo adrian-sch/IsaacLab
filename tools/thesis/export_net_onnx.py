@@ -41,11 +41,23 @@ kwargs = {
 }
 
 loaded_model = torch.load(weight_path)
+state_dict = loaded_model["model"]  # Extract only model weights
+
+# Remove potential prefixes if needed
+new_state_dict = {k.replace("a2c_network.", ""): v for k, v in state_dict.items()}
+
+
+print(loaded_model["model"].keys())
+print(new_state_dict.keys())
 
 original_network: torch.nn.Module = ActorCriticNetwork(net_cfg, **kwargs)
-original_network.load_state_dict(loaded_model['model'], strict=False)
+missing, unexpected = original_network.load_state_dict(new_state_dict, strict=False)
 network = ActorCriticInference(original_network)
 
+if missing or unexpected:
+        print("WARNING: MISSING OR UNEXPECTED KEYS, CHECK THE NETWORK, PARAMETERS MAY NOT BE LOADED CORRECTLY")
+        print("Missing keys:", missing)
+        print("Unexpected keys:", unexpected)
 
 input = {}
 
@@ -54,9 +66,8 @@ for key, value in input_shape.items():
 
 # input = (input['lidar'], input['sensor'])
 
-network(input['lidar'], input['sensor'])
-
-print(network(input['lidar'], input['sensor']))
+with torch.no_grad():
+        print(network(input['lidar'], input['sensor']))
 
 onnx_programm = torch.onnx.dynamo_export(network, input['lidar'], input['sensor'])
 
