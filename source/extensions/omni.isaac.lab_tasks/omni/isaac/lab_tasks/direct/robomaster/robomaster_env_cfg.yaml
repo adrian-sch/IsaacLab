@@ -22,10 +22,8 @@ params:
   lidar_horizontal_fov_range: [-180, 180] # in degrees
   lidar_horizontal_res: 0.12              # in degrees
   lidar_drift_range: [-0.00, 0.00]        # in meters
-  lidar_accuracy: 0.00                    # in meters
-  # TODO add noise back to lidar when it is working wihout
-  # lidar_drift_range: [-0.05, 0.05]        # in meters
-  lidar_accuracy: 0.05                    # in meters
+  lidar_base_noise: 0.0                   # in meters # TODO probably not zero but verry small
+  lidar_range_dependet_noise: 0.00166     # in percent of the range 0.00166 = +-5cm at 30m
   lidar_max_distance: 5.0                 # in meters
 
   lidar_skip_rays: 1                      # reduces the amount of rays to simulate a lower resolution and reduce computation, when 0 all rays are used
@@ -36,8 +34,6 @@ params:
   num_envs: 1024
   env_spacing: 10.0
 
-  # fin_dist: 0.10     # 10 cm
-  # fin_angle: 0.085   # approx 5 degrees in radians
   fin_dist: 0.06    # in cm
   fin_angle: 0.05   # in radians
   fin_lin_vel: 0.1  # in m/s

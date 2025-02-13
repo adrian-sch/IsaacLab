@@ -68,11 +68,25 @@ class RayCasterCfg(SensorBaseCfg):
     For floating base robots, this is useful for simulating drift in the robot's pose estimation.
     """
 
-    accuracy: float = 0.0
+    base_noise: float = 0.0
     """The accuracy (in meters) of the ray distance readings (in meters). Defaults to 0.0.
+    
+    Is used to crate a Normal Distribution with this value as the 95% confidence interval.
+    
+    Noise Model: x = x + (x * range_dependent_noise + base_noise)
 
-    Accuracy is used to simulate noise in the sensor's distance measurements. Accuracy is the range of the 95% 
-    confidence interval.
+
+    Note:
+        This only effects the distance readings, not the ray hits itself or the Visualization. 
+        Feel free to implement this yourself when needed. 
+    """
+
+    range_dependet_noise: float = 0.0
+    """The range dependent noise (in percent/100) of the ray distance readings dependent of the range (in meters). Defaults to 0.0.
+    
+    Is used to crate a Normal Distribution with this value as the 95% confidence interval.
+    
+    Noise Model: x = x + (x * range_dependent_noise + base_noise)
 
     Note:
         This only effects the distance readings, not the ray hits itself or the Visualization. 

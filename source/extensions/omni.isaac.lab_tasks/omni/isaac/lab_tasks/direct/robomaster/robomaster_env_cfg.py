@@ -165,7 +165,6 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
     # Rigid Object
     for i in range(num_objects):
         object_prim_path = f"/World/envs/env_.*/Object_{i}"
-        # cfg = random.choice(objects) # TODO better use torch? so seed is set?
         rigid_object_cfg = objects[i%len(objects)]
         objects_cfgs.append(rigid_object_cfg.replace(prim_path=object_prim_path))
         lidar_prim_paths.append(object_prim_path)
@@ -174,14 +173,13 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
     lidar_scanner_cfg = RayCasterCfg(
         prim_path="/World/envs/env_.*/Robot/base_link",
         mesh_prim_paths=lidar_prim_paths,
-        # TODO skip rays cfg
         pattern_cfg=patterns.LidarPatternCfg(channels=1, vertical_fov_range=(0.0, 0.0), horizontal_fov_range=tuple(cfg["lidar_horizontal_fov_range"]), horizontal_res=cfg["lidar_horizontal_res"] * int(lidar_skip_rays + 1)),
         offset=OffsetCfg(pos=(0.0, 0.0, 0.211)),
         attach_yaw_only=True,
-        debug_vis=False, # TODO flag for when video is recorded
-        # TODO add noise back when we learned somthing without
+        debug_vis=False,
         drift_range=tuple(cfg["lidar_drift_range"]),
-        accuracy=cfg["lidar_accuracy"],
+        base_noise=cfg["lidar_base_noise"],
+        range_dependet_noise=cfg["lidar_range_dependet_noise"],
         max_distance=cfg["lidar_max_distance"],
     )
 
@@ -190,10 +188,9 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
     contact_sensor: ContactSensorCfg = ContactSensorCfg(
         prim_path="/World/envs/env_.*/Robot/base_link",
         # filter_prim_paths_expr=["/World/envs/env_.*/Object_.*", "/World/envs/env_.*/Shelf", "/World/envs/env_.*/Arena"],
-        debug_vis=False, # TODO flag for when video is recorded
+        debug_vis=False,
     )
 
-    # TODO reward sclaes
     # reward scales
     delta_goal_dist_lin_scale = cfg["delta_goal_dist_lin_scale"]
     delta_goal_angel_lin_scale = cfg["delta_goal_angel_lin_scale"]

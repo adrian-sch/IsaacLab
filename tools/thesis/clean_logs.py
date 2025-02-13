@@ -2,15 +2,17 @@ import os
 import shutil
 
 # Define the path to the log directories
-log_dir_path = 'logs/rl_games/robomaster_direct'
+rel_log_dir_path = '../../logs/rl_games/robomaster_direct' # relative to the script directory
 script_dir = os.path.dirname(os.path.realpath(__file__))
+
+log_dir = os.path.abspath(os.path.join(script_dir, rel_log_dir_path))
 
 dirs_to_delete = []
 # Iterate over all items in the log directory
-dirs = os.listdir(os.path.join(script_dir,log_dir_path))
+dirs = os.listdir(log_dir)
 dirs.sort()
 for item in dirs:
-    item_path = os.path.join(log_dir_path, item)
+    item_path = os.path.join(log_dir,  item)
     
     # Check if the item is a directory
     if os.path.isdir(item_path):
@@ -21,11 +23,10 @@ for item in dirs:
             print(f"Found directory: {item_path}")
             dirs_to_delete.append(item_path)
 
+print(f"Total number ob log dirs: {len(dirs)}")
 if len(dirs_to_delete) == 0:
     print("No directories to delete.")
     exit()
-
-print(f"Total number ob log dirs: {len(dirs)}")
 print(f"Found {len(dirs_to_delete)} directories to delete.")
 print("Do you want to proceed? (y/n)")
 proceed = input()

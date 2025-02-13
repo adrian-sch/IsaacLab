@@ -321,7 +321,8 @@ class RayCaster(SensorBase):
         # prepare drift
         self.drift = torch.zeros(self._view.count, 3, device=self.device)
         # prepare noise, calculate stadnrt deviation from accuracs in a 95% confidence interval
-        self.noise_level = self.cfg.accuracy / 1.96
+        self.noise_level_base = self.cfg.base_noise / 1.96
+        self.noise_level_range = self.cfg.range_dependet_noise / 1.96
         # fill the data buffer
         self._data.pos_w = torch.zeros(self._view.count, 3, device=self._device)
         self._data.quat_w = torch.zeros(self._view.count, 4, device=self._device)
@@ -387,7 +388,12 @@ class RayCaster(SensorBase):
                 ray_hits = torch.where(expanded_mask, new_ray_hits, ray_hits)
 
         self._data.ray_hits_w[env_ids] = ray_hits
-        noise = torch.normal(mean=0.0, std=self.noise_level, size=(len(env_ids), self.num_rays), device=self._device)
+        
+        # calculate noise
+        alpha = torch.normal(mean=0.0, std=self.noise_level_range, size=(len(env_ids), self.num_rays), device=self._device)
+        beta = torch.normal(mean=0.0, std=self.noise_level_base, size=(len(env_ids), self.num_rays), device=self._device)
+        noise = ray_distances * alpha + beta
+        
         self._data.ray_distances[env_ids] = ray_distances + noise
 
     def _set_debug_vis_impl(self, debug_vis: bool):
