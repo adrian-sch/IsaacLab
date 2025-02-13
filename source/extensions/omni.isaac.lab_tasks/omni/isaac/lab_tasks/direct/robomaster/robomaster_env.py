@@ -190,6 +190,13 @@ class RobomasterEnv(DirectRLEnv):
         
         # self._dist_to_objecs = dist_to_objecs
 
+
+        # add noise to odom
+        if self.cfg.odom_lin_vel_noise > 0.0:
+            robo_lin_vel += torch.normal(0, self.cfg.odom_lin_vel_noise, robo_lin_vel.shape, device=self.device)
+        if self.cfg.odom_ang_vel_noise > 0.0:
+            robo_ang_vel += torch.normal(0, self.cfg.odom_ang_vel_noise, robo_ang_vel.shape, device=self.device)
+        
         obs = {
             "lidar": self._lidar_buf,
             "sensor": 
@@ -235,6 +242,11 @@ class RobomasterEnv(DirectRLEnv):
                 ],
                 dim=-1,
             )
+            
+        # log observations for debugging
+        if self.debug and self.common_step_counter % 100:
+            script_path = os.path.dirname(os.path.realpath(__file__))
+            dump_pickle(os.path.join(script_path, "obs.pkl"), obs)
             
         observations = {"policy": obs}
         return observations
@@ -312,6 +324,11 @@ class RobomasterEnv(DirectRLEnv):
                 print(f"|| \t {key}: {value[0].item()}")
                 print(f"|| \t sum {key}: {self._episode_sums[key][0].item()}")
             print("-"*50)
+            
+            # log rewards for debugging
+            if self.common_step_counter % 100:
+                script_path = os.path.dirname(os.path.realpath(__file__))
+                dump_pickle(os.path.join(script_path, "rewards.pkl"), rewards)
 
         return reward
 
@@ -401,8 +418,6 @@ class RobomasterEnv(DirectRLEnv):
         self.place_shelf(env_ids, goal_pose[env_ids])
 
         super()._reset_idx(env_ids)
-
-        
         
         # Logging
         extras = dict()

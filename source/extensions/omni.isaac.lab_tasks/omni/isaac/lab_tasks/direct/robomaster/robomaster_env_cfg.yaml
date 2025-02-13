@@ -26,6 +26,10 @@ params:
   lidar_range_dependet_noise: 0.00166     # in percent of the range 0.00166 = +-5cm at 30m
   lidar_max_distance: 5.0                 # in meters
 
+  # TODO check these values 
+  odom_lin_vel_noise: 0.0125              # in m/s
+  odom_ang_vel_noise: 0.0125              # in rad/s
+
   lidar_skip_rays: 1                      # reduces the amount of rays to simulate a lower resolution and reduce computation, when 0 all rays are used
   lidar_history_length: 3                 # number of lidar readings to stack for input to the network
 

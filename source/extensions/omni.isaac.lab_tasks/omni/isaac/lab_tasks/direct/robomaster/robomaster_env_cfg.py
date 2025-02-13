@@ -53,6 +53,9 @@ class RobomasterEnvCfg(DirectRLEnvCfg):
     lidar_skip_rays = cfg["lidar_skip_rays"]             # reduces the amount of rays to simulate a lower resolution and reduce computation, when 0 all rays are used
     lidar_history_length = cfg["lidar_history_length"] 
     
+    odom_lin_vel_noise = cfg["odom_lin_vel_noise"]              # in m/s
+    odom_ang_vel_noise = cfg["odom_ang_vel_noise"]              # in rad/s
+    
     action_space = 3
 
     num_rays = int((abs(cfg["lidar_horizontal_fov_range"][0]) + abs(cfg["lidar_horizontal_fov_range"][1]))/cfg["lidar_horizontal_res"])

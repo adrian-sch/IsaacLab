@@ -79,10 +79,6 @@ class ActorCriticNetwork(BaseNetwork):
         lidar = lidar["lidar"].to(self._device)
         sensor = torch.cat([x.flatten(start_dim=1) for x in sensor.values()], dim=1).to(self._device)
 
-        # TODO add this in the env when the sensor is created only for 
-        # add noise to sensor
-        # sensor += torch.normal(0, 0.0125, sensor.shape, device=self._device)
-
         if len(goal) > 0:
             goal = torch.cat([x.flatten(start_dim=1) for x in goal.values()], dim=1).to(self._device)
             c_in = torch.cat([sensor, goal], dim=1)
