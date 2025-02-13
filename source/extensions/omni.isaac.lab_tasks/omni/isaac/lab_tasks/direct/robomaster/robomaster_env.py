@@ -156,30 +156,45 @@ class RobomasterEnv(DirectRLEnv):
     def _get_observations(self) -> dict:
         self._previous_actions = self._actions.clone()
 
-        # robo_odom = self._robot.data.root_pos_w[:, :2]
+        # get robot velocity
         robo_lin_vel = self._robot.data.root_lin_vel_b[:, :2]
         robo_ang_vel = self._robot.data.root_ang_vel_b[:, 2]
         
+        # normalize velocity
+        robo_lin_vel[:,0] = robo_lin_vel[:,0] / self.cfg.action_scale_x_pos # TODO is it ok to normalize like this or should all be normalized by x scale?
+        robo_lin_vel[:,1] = robo_lin_vel[:,1] / self.cfg.action_scale_y
+        robo_ang_vel = robo_ang_vel / self.cfg.action_scale_ang
+
+        # add noise to velocity
+        if self.cfg.odom_lin_vel_noise > 0.0:
+            robo_lin_vel += torch.normal(0, self.cfg.odom_lin_vel_noise, robo_lin_vel.shape, device=self.device)
+        if self.cfg.odom_ang_vel_noise > 0.0:
+            robo_ang_vel += torch.normal(0, self.cfg.odom_ang_vel_noise, robo_ang_vel.shape, device=self.device)
+
+        # get and normalize lidar data
+        lidar_data = self._lidar_scanner.data.ray_distances / self.cfg.lidar_scanner_cfg.max_distance
+        # Shift the buffer to the back and nsert the new scan at the front
+        self._lidar_buf[:, 1:] = self._lidar_buf[:, :-1]
+        self._lidar_buf[:, 0] = lidar_data
+        
+        # get distance and angle error to goal        
         robo_yaw = yaw_from_quad(self._robot.data.root_quat_w)
         goal_yaw = yaw_from_quad(self.goal_pose[:, 3:])
-
-        self._dist_to_goal = torch.norm(self.goal_pose[:, :3] - self._robot.data.root_pos_w, dim=-1) 
         
         # angle error to goal
         angle_diff = goal_yaw - robo_yaw
         self._angle_error_goal = torch.atan2(torch.sin(angle_diff), torch.cos(angle_diff))
 
+        self._dist_to_goal = torch.norm(self.goal_pose[:, :3] - self._robot.data.root_pos_w, dim=-1)         
         rel_goal_pos = self.goal_pose[:, :3] - self._robot.data.root_pos_w
         #rotate around z-axis to align with robot
         rel_goal_pos_rot = torch.zeros(self.num_envs, 2, device=self.device)
         rel_goal_pos_rot[:, 0] = rel_goal_pos[:, 0] * torch.cos(-robo_yaw.squeeze()) - rel_goal_pos[:, 1] * torch.sin(-robo_yaw.squeeze())
         rel_goal_pos_rot[:, 1] = rel_goal_pos[:, 0] * torch.sin(-robo_yaw.squeeze()) + rel_goal_pos[:, 1] * torch.cos(-robo_yaw.squeeze())
 
-        # normalize lidar data
-        lidar_data = self._lidar_scanner.data.ray_distances / self.cfg.lidar_scanner_cfg.max_distance
-        # Shift the buffer to the back and nsert the new scan at the front
-        self._lidar_buf[:, 1:] = self._lidar_buf[:, :-1]
-        self._lidar_buf[:, 0] = lidar_data
+        # normalize distance and angle error
+        rel_goal_pos_rot = rel_goal_pos_rot / self.cfg.env_spacing
+        norm_angle_error = self._angle_error_goal / math.pi
 
         # TODO do we we need this anymore?
         # dist_to_objecs = torch.empty(self.num_envs, 0, device=self.device)
@@ -189,13 +204,6 @@ class RobomasterEnv(DirectRLEnv):
         #     dist_to_objecs = torch.cat((dist_to_objecs, dist), dim=1)
         
         # self._dist_to_objecs = dist_to_objecs
-
-
-        # add noise to odom
-        if self.cfg.odom_lin_vel_noise > 0.0:
-            robo_lin_vel += torch.normal(0, self.cfg.odom_lin_vel_noise, robo_lin_vel.shape, device=self.device)
-        if self.cfg.odom_ang_vel_noise > 0.0:
-            robo_ang_vel += torch.normal(0, self.cfg.odom_ang_vel_noise, robo_ang_vel.shape, device=self.device)
         
         obs = {
             "lidar": self._lidar_buf,
@@ -204,8 +212,6 @@ class RobomasterEnv(DirectRLEnv):
                     [
                         tensor
                         for tensor in (
-                            # robo_odom, # TODO I think this is no good for learning, because its absolute and "random"
-                            # robo_yaw, # TODO see upper comment
                             robo_lin_vel,
                             robo_ang_vel.unsqueeze(1),
                         )
@@ -220,8 +226,8 @@ class RobomasterEnv(DirectRLEnv):
                     tensor
                     for tensor in (
                         rel_goal_pos_rot,
-                        self._dist_to_goal.unsqueeze(1),
-                        self._angle_error_goal.unsqueeze(1),
+                        # self._dist_to_goal.unsqueeze(1), # TODO redundant sice its the norm of rel_goal_pos_rot, so i guess not needed
+                        norm_angle_error.unsqueeze(1),
                     )
                     if tensor is not None
                 ],
@@ -235,8 +241,8 @@ class RobomasterEnv(DirectRLEnv):
                     for tensor in (
                         obs["sensor"],
                         rel_goal_pos_rot,
-                        self._dist_to_goal.unsqueeze(1),
-                        self._angle_error_goal.unsqueeze(1),
+                        # self._dist_to_goal.unsqueeze(1), # TODO redundant sice its the norm of rel_goal_pos_rot, so i guess not needed
+                        norm_angle_error.unsqueeze(1),
                     )
                     if tensor is not None
                 ],
